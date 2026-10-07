@@ -1,0 +1,19 @@
+# etat & config personnels (cle API Civitai, chemins, styles custom)
+app_settings.json
+games.json
+styles.json
+queue_state.json
+
+# modeles & caches locaux (telecharges a la demande)
+.matting/
+.tagger/
+.thumbs/
+
+# sauvegardes & caches
+_backups/
+__pycache__/
+*.pyc
+
+# outils locaux
+.claude/
+*.lnk

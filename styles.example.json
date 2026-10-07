@@ -1,0 +1,96 @@
+{
+  "defaults": {
+    "steps": 28,
+    "cnet_strength": 0.5,
+    "cnet_end": 0.75,
+    "denoise": 0.7,
+    "size": 1024,
+    "pony": {
+      "checkpoint": "autismmixSDXL_autismmixPony.safetensors",
+      "cfg": 7.0,
+      "prefix": "score_9, score_8_up, score_7_up, source_anime, rating_safe, ",
+      "negative": "score_6, score_5, score_4, worst quality, low quality, jpeg artifacts, blurry, text, watermark, signature, logo, 3d"
+    },
+    "illustrious": {
+      "checkpoint": "waiIllustriousSDXL_v170.safetensors",
+      "cfg": 5.5,
+      "prefix": "masterpiece, best quality, amazing quality, ",
+      "negative": "worst quality, bad quality, jpeg artifacts, blurry, text, watermark, signature, logo, censored"
+    },
+    "suffix": ", portrait, upper body, solo, looking ahead, detailed face, simple background"
+  },
+  "styles": {
+    "manga_90s": {
+      "label": "Manga 90s",
+      "base": "illustrious",
+      "lora": null,
+      "prompt": "1990s \\(style\\), retro artstyle, clean lineart, cel shading, vivid colors",
+      "denoise": 0.75,
+      "cnet_strength": 0.35,
+      "cnet_end": 0.6
+    },
+    "ligne_claire": {
+      "label": "Ligne claire",
+      "base": "illustrious",
+      "lora": null,
+      "prompt": "ligne claire, clean even lineart, flat colors, franco-belgian comics \\(style\\)",
+      "denoise": 0.75,
+      "cnet_strength": 0.35,
+      "cnet_end": 0.6
+    },
+    "watercolor": {
+      "label": "Watercolor",
+      "base": "illustrious",
+      "lora": null,
+      "prompt": "watercolor \\(medium\\), traditional media, soft color wash, delicate lineart, classical fantasy illustration",
+      "denoise": 0.7,
+      "cnet_strength": 0.5,
+      "cnet_end": 0.75
+    },
+    "american_comics": {
+      "label": "American comics",
+      "base": "pony",
+      "lora": null,
+      "prompt": "western comics \\(style\\), bold clean inks, dynamic, high contrast shading, detailed eyes",
+      "denoise": 0.75,
+      "cnet_strength": 0.35,
+      "cnet_end": 0.6
+    },
+    "oil_painting": {
+      "label": "Oil painting",
+      "base": "illustrious",
+      "lora": null,
+      "prompt": "oil painting \\(medium\\), painterly brushstrokes, classical illustration, dramatic lighting",
+      "denoise": 0.7,
+      "cnet_strength": 0.5,
+      "cnet_end": 0.75
+    },
+    "dark_gothic": {
+      "label": "Dark gothic",
+      "base": "illustrious",
+      "lora": null,
+      "prompt": "gothic, chiaroscuro, painterly, fine ink lines, elegant, muted colors",
+      "denoise": 0.6,
+      "cnet_strength": 0.5,
+      "cnet_end": 0.75
+    },
+    "ink_sketch": {
+      "label": "Ink sketch",
+      "base": "pony",
+      "lora": null,
+      "prompt": "ink sketch, rough expressive lineart, manga, pencil shading, muted colors",
+      "denoise": 0.75,
+      "cnet_strength": 0.35,
+      "cnet_end": 0.6
+    },
+    "retro_fighting_game": {
+      "label": "Retro fighting game",
+      "base": "illustrious",
+      "lora": null,
+      "prompt": "1990s \\(style\\), retro artstyle, fighting game illustration, bold ink lines, high contrast cel shading, dynamic, gritty shadows",
+      "denoise": 0.8,
+      "cnet_strength": 0.35,
+      "cnet_end": 0.6
+    }
+  }
+}

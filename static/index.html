@@ -1,0 +1,333 @@
+<!doctype html><html><head><meta charset="utf-8">
+<title>PortraitForge</title><link rel="stylesheet" href="/static/app.css"></head><body>
+<header><h1 id="appTitle">PortraitForge</h1>
+<button id="btnGame" onclick="gameOpen()" title="changer de jeu">🎮</button>
+<div class="tabs">
+ <button id="tabM" onclick="setMode('matrix')">Vue d'ensemble</button>
+ <button id="tabD" onclick="setMode('detail')">Par style</button>
+ <button id="tabX" onclick="setMode('mix')">Sélection globale</button>
+ <button id="tabP" onclick="setMode('prog')">Génération</button>
+ <button id="tabT" onclick="setMode('tri')">Tri des textures</button>
+</div>
+<span id="prog"></span>
+<span id="status"></span>
+<button id="btnPause" onclick="queueCtl(qPaused?'resume':'pause')" title="mettre la file en pause / reprendre">⏸</button>
+<button id="btnClear" onclick="queueCtl('clear')" title="vider la file d'attente">🗑</button>
+<button id="btnOpt" onclick="optOpen()" title="options de l'app">⚙ Options</button>
+<div id="subbar">
+ <label id="styleWrap">Style : <input id="styleFilter" class="selfilter" placeholder="🔍 filtrer" title="filtre la liste des artistes au clavier"><button class="navst" onclick="navStyle(-1)" title="style précédent">◀</button><select id="styleSel"></select><button class="navst" onclick="navStyle(1)" title="style suivant">▶</button></label>
+ <button id="btnMissing" onclick="popMissing(event)">Générer les manquants</button>
+ <button id="btnGenAll" onclick="popAll(event)" title="génère X variantes pour chaque personnage, avec ou sans images, sélectionné ou pas">Générer <span id="genAllN">2</span> de chaque</button>
+ <button id="btnAutoSel" onclick="autoSelect()" title="sélectionne la variante la plus récente pour chaque personnage sans sélection">Sélection auto</button>
+ <span id="sexFilterWrap" title="filtrer les personnages par sexe">Sexe :
+  <button class="sfb" data-v="" onclick="setSexFilter('')">Tous</button>
+  <button class="sfb m" data-v="male" onclick="setSexFilter('male')">♂</button>
+  <button class="sfb f" data-v="female" onclick="setSexFilter('female')">♀</button>
+  <button class="sfb o" data-v="other" onclick="setSexFilter('other')">✎</button>
+ </span>
+ <label id="todoWrap" title="n'afficher que les personnages sans sélection"><input type="checkbox" id="todoChk" onchange="todoOnly=this.checked;render()"> à traiter</label>
+ <button class="primary" id="btnExport" onclick="exportSel()"><span id="expLabel">Exporter</span> <span class="badge" id="selCount">0</span></button>
+ <button id="btnDelUnsel" class="dangerbtn" onclick="deleteStyleImages(true)" title="supprime les images non sélectionnées de ce style (avec confirmation)">🗑 Non sélectionnées</button>
+ <button id="btnDelStyle" class="dangerbtn" onclick="deleteStyleImages(false)" title="supprime TOUTES les images générées de ce style — les originaux sont conservés (avec confirmation)">🗑 Tout le style</button>
+ <span id="searchLinks">réf. du style : <a id="lnkG" href="#" target="_blank" rel="noopener">Google Images</a> · <a id="lnkY" href="#" target="_blank" rel="noopener">Yandex Images</a></span>
+ <span id="tabHint"></span>
+</div></header>
+<div id="content"></div>
+<div id="optpop">
+ <h3>Options</h3>
+ <div class="opttabs">
+  <button id="otG" class="on" onclick="optTab('G')">Général</button>
+  <button id="otN" onclick="optTab('N')">Génération</button>
+  <button id="otP" onclick="optTab('P')">Prompts</button>
+  <button id="otA" onclick="optTab('A')">Artistes</button>
+  <button id="otC" onclick="optTab('C')">Chemins</button>
+  <button id="otK" onclick="optTab('K')">Civitai</button>
+ </div>
+ <div id="osecN" class="osec" style="display:none">
+  <div class="qty"><label title="moins = plus rapide, plus = plus fin">Steps (vide = 28) :</label>
+   <input id="optGenSteps" type="number" min="15" max="40" placeholder="28" onchange="optSave()">
+  </div>
+  <div class="qty"><label title="768 pour itérer vite, 1216+ pour la qualité finale">Résolution :</label>
+   <select id="optGenSize" onchange="optSave()">
+    <option value="">défaut (1024)</option>
+    <option value="768">768 (rapide)</option>
+    <option value="1024">1024</option>
+    <option value="1216">1216 (qualité)</option>
+    <option value="1536">1536 (lent)</option>
+   </select>
+  </div>
+  <div class="qty"><label>Sampler :</label>
+   <select id="optSampler" onchange="optSave()">
+    <option value="">défaut (euler ancestral / normal)</option>
+    <option value="euler_ancestral|normal">euler ancestral / normal</option>
+    <option value="dpmpp_2m|karras">dpm++ 2m / karras (net)</option>
+    <option value="dpmpp_2m_sde|karras">dpm++ 2m sde / karras</option>
+    <option value="euler|normal">euler / normal</option>
+   </select>
+  </div>
+  <div class="qty"><label title="plus haut = suit plus le prompt">CFG Pony (vide = 7.0) :</label>
+   <input id="optCfgPony" type="number" step="0.5" min="1" max="15" placeholder="7.0" onchange="optSave()">
+  </div>
+  <div class="qty"><label>CFG Illustrious (vide = 5.5) :</label>
+   <input id="optCfgIl" type="number" step="0.5" min="1" max="15" placeholder="5.5" onchange="optSave()">
+  </div>
+  <div style="margin-top:6px"><label>Checkpoint Pony :</label>
+   <input id="optCkptPonyF" class="selfilter" style="width:100%;box-sizing:border-box;margin-top:3px" placeholder="🔍 filtrer" oninput="fillCheckpoints()">
+   <select id="optCkptPony" style="width:100%;margin-top:3px" onchange="optSave()"></select>
+  </div>
+  <div style="margin-top:6px"><label>Checkpoint Illustrious :</label>
+   <input id="optCkptIlF" class="selfilter" style="width:100%;box-sizing:border-box;margin-top:3px" placeholder="🔍 filtrer" oninput="fillCheckpoints()">
+   <select id="optCkptIl" style="width:100%;margin-top:3px" onchange="optSave()"></select>
+  </div>
+  <div class="qty" style="margin-top:6px"><label title="lineart respecte mieux les traits des portraits dessinés">ControlNet :</label>
+   <select id="optCnetType" onchange="optSave()">
+    <option value="canny">canny (contours)</option>
+    <option value="lineart">lineart anime (traits)</option>
+   </select>
+  </div>
+  <div style="margin-top:8px">
+   <label title="injecte les couleurs de cheveux/yeux et accessoires détectés dans le prompt de chaque perso"><input type="checkbox" id="optAutoTags" checked onchange="optSave()"> Utiliser les tags auto des portraits ⓘ</label>
+  </div>
+  <div class="qty"><label title="plus bas = plus de tags détectés (défaut 0.35)">Seuil de détection des tags :</label>
+   <input id="optTagThr" type="number" step="0.05" min="0.1" max="0.9" value="0.35" onchange="optSave()">
+  </div>
+  <div style="margin-top:6px">
+   <label title="retire le voile blanc sur les bords semi-transparents des images générées"><input type="checkbox" id="optAntiHalo" checked onchange="optSave()"> Anti-halo sur les contours ⓘ</label>
+  </div>
+ </div>
+ <div id="osecP" class="osec" style="display:none">
+  <label>Préfixe qualité Pony :</label>
+  <textarea id="optPPrefix" class="deftxt" onchange="defSave()"></textarea>
+  <label>Négatif de base Pony :</label>
+  <textarea id="optPNeg" class="deftxt" onchange="defSave()"></textarea>
+  <label>Préfixe qualité Illustrious :</label>
+  <textarea id="optIPrefix" class="deftxt" onchange="defSave()"></textarea>
+  <label>Négatif de base Illustrious :</label>
+  <textarea id="optINeg" class="deftxt" onchange="defSave()"></textarea>
+  <label>Suffixe commun (fin du prompt positif) :</label>
+  <textarea id="optSuffix" class="deftxt" onchange="defSave()"></textarea>
+  <div style="margin-top:6px;font-size:11px;color:var(--dim);font-style:italic">
+   Chaîne finale : préfixe + [sexe + tags auto] + prompt du style + suffixe (+ tes ajouts Custom).
+  </div>
+ </div>
+ <div id="osecG" class="osec">
+  <div class="qty"><label>Images par clic sur "⟳ Regénération" :</label>
+   <input id="optRegenCount" type="number" min="1" max="10" value="2" onchange="optSave()">
+  </div>
+  <div class="qty"><label>Quantité par défaut du panneau Custom :</label>
+   <input id="optCustomCount" type="number" min="1" max="10" value="5" onchange="optSave()">
+  </div>
+  <div class="qty"><label>Images par clic sur "Générer X de chaque" :</label>
+   <input id="optGenAll" type="number" min="1" max="10" value="2" onchange="optSave()">
+  </div>
+  <div style="margin-top:8px">
+   <label><input type="checkbox" id="optDnStyle" checked onchange="optSave()"> Utiliser le denoise propre à chaque style</label>
+   <div id="optDnRow" style="margin-top:4px">
+    <label>Denoise global : <span id="optDnVal">0.70</span></label>
+    <input id="optDn" type="range" min="0" max="1" step="0.05" value="0.7" style="width:100%" oninput="document.getElementById('optDnVal').textContent=(+this.value).toFixed(2)" onchange="optSave()">
+   </div>
+  </div>
+  <div class="qty"><label>Images affichées dans le mur "Génération" :</label>
+   <input id="optWall" type="number" min="10" max="500" value="60" onchange="optSave()">
+  </div>
+  <div class="qty" style="margin-top:8px"><label>Taille des vignettes :</label>
+   <select id="optThumb" onchange="optSave()">
+    <option value="petites">petites</option>
+    <option value="moyennes" selected>moyennes</option>
+    <option value="grandes">grandes</option>
+   </select>
+  </div>
+ </div>
+ <div id="osecA" class="osec" style="display:none">
+  <label>Artistes affichés :</label>
+  <div id="optStyles" class="optstyles"></div>
+  <div style="margin-top:8px;font-size:12px;color:var(--dim);font-style:italic">
+   Les réglages par style (LoRA, denoise, ControlNet) se font dans l'onglet
+   "Par style", via ⚙ Custom / Générer les manquants / Générer X de chaque.
+  </div>
+ </div>
+ <div id="osecC" class="osec" style="display:none">
+  <label>Répertoire du pack de textures (export) :</label>
+  <input id="optPackDir" type="text" style="width:100%;box-sizing:border-box;margin-top:4px;background:#181c22;border:1px solid #444;border-radius:6px;color:#ddd;padding:6px;font-size:12px" onchange="optSave()">
+  <div style="margin-top:8px"><label>URL de ComfyUI (vide = http://127.0.0.1:8188) :</label>
+   <input id="optComfy" type="text" style="width:100%;box-sizing:border-box;margin-top:4px;background:#181c22;border:1px solid #444;border-radius:6px;color:#ddd;padding:6px;font-size:12px" placeholder="http://127.0.0.1:8188" onchange="optSave()">
+  </div>
+  <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+   <button onclick="openDir('pack')">📂 Pack</button>
+   <button onclick="openDir('selected')">📂 _selected</button>
+   <button onclick="openDir('backup')">📂 Backups</button>
+   <button onclick="openDir('thumbs')">📂 Miniatures</button>
+  </div>
+  <div style="margin-top:10px">
+   <label title="décoché : les images sont installées en 1024px (plus net si l'émulateur accepte les tailles supérieures)"><input type="checkbox" id="optResize" checked onchange="optSave()"> Redimensionner à la taille d'origine à l'export ⓘ</label>
+  </div>
+  <div style="margin-top:6px">
+   <label title="sauvegarde l'original du pack dans _pack_backup au premier remplacement"><input type="checkbox" id="optBackup" checked onchange="optSave()"> Backup du pack avant écrasement ⓘ</label>
+  </div>
+  <div style="margin-top:10px">
+   <button onclick="restoreOriginals()" title="recopie les portraits de _originals dans le pack">↩ Restaurer les portraits d'origine</button>
+  </div>
+ </div>
+ <div id="osecK" class="osec" style="display:none">
+  <label>Clé API Civitai :</label>
+  <input id="optCivitai" type="text" style="width:100%;box-sizing:border-box;margin-top:4px;background:#181c22;border:1px solid #444;border-radius:6px;color:#ddd;padding:6px;font-size:12px" placeholder="32 caractères hexadécimaux" onchange="optSave()">
+  <div style="margin-top:8px;font-size:12px;color:var(--dim)">
+   Utilisée pour télécharger les LoRAs réservés aux comptes connectés
+   (téléchargements en <code>?token=...</code>). Se crée gratuitement sur
+   civitai.com → Settings → API Keys. Stockée en local dans app_settings.json.
+  </div>
+ </div>
+ <div class="actions"><button onclick="optClose()">Fermer</button></div>
+</div>
+<div id="gamepopbg" onclick="gameClose()"></div>
+<div id="gamepop">
+ <h3>🎮 Jeux</h3>
+ <div id="gameList"></div>
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+  <button class="primary" id="btnGameAdd" onclick="gameAddToggle()">＋ Ajouter un jeu</button>
+  <button onclick="gameClose()">Fermer</button>
+ </div>
+ <div class="gameadd" id="gameAddForm" style="display:none">
+  <h4>Nouveau jeu</h4>
+  <label>Nom :</label>
+  <input id="gaName" type="text" placeholder="ex: Chrono Cross">
+  <label>Répertoire de travail — doit contenir un sous-dossier <b>_originals</b> avec les images d'origine ; les images générées y seront stockées :</label>
+  <div class="dirrow">
+   <input id="gaWork" type="text" placeholder="D:\...\MonJeu-portraits">
+   <button onclick="pickDir('gaWork')" title="choisir avec l'explorateur Windows">📂 Parcourir…</button>
+  </div>
+  <label>Répertoire de destination (pack de textures, optionnel) :</label>
+  <div class="dirrow">
+   <input id="gaPack" type="text" placeholder="D:\...\MonJeu-texture-replacements">
+   <button onclick="pickDir('gaPack')" title="choisir avec l'explorateur Windows">📂 Parcourir…</button>
+  </div>
+  <div style="display:flex;justify-content:flex-end;margin-top:8px">
+   <button class="primary" onclick="gameAdd()">Ajouter et ouvrir</button>
+  </div>
+  <div id="gaErr" style="color:#f88;font-size:12px"></div>
+ </div>
+</div>
+<input type="file" id="upInput" accept="image/*" multiple style="display:none">
+<div id="croppopbg"></div>
+<div id="croppop">
+ <h3 id="cropTitle">✂ Recadrer</h3>
+ <div id="cropTools">
+  <button onclick="cropRotate(-1)" title="pivoter de 90° vers la gauche">⟲ 90°</button>
+  <button onclick="cropRotate(1)" title="pivoter de 90° vers la droite">⟳ 90°</button>
+  <button onclick="cropFlip(false)" title="miroir horizontal (gauche ↔ droite)">⇋ Miroir H</button>
+  <button onclick="cropFlip(true)" title="miroir vertical (haut ↔ bas)">⇵ Miroir V</button>
+  <button id="cropWandBtn" onclick="cropWandToggle()" title="baguette magique : activer puis cliquer sur le fond uni pour le rendre transparent (plusieurs clics possibles)">🪄 Fond</button>
+  <label id="cropTolWrap" title="tolérance de la baguette : écart de couleur accepté autour du pixel cliqué">tol. <input id="cropTol" type="range" min="4" max="80" value="24"></label>
+  <button onclick="cropReset()" title="annuler rotation / miroir / baguette : revenir à l'image d'origine">↺ Réinit</button>
+ </div>
+ <canvas id="cropCanvas"></canvas>
+ <div id="cropInfo"></div>
+ <div class="actions">
+  <button onclick="cropCancel()" title="ne pas uploader cette image (Échap)">Annuler</button>
+  <button onclick="cropFull()" title="uploader l'image entière, sans recadrage">Image entière</button>
+  <button class="primary" onclick="cropOk()" title="uploader la zone recadrée (Entrée)">✔ Valider le recadrage</button>
+ </div>
+</div>
+<div id="toast"></div>
+<div id="ctx"></div>
+<div id="verpopbg" onclick="verClose()"></div>
+<div id="verpop"></div>
+<button id="vnavL" class="vnav" onclick="verNav(-1)" title="portrait précédent (←)">❮</button>
+<button id="vnavR" class="vnav" onclick="verNav(1)" title="portrait suivant (→)">❯</button>
+<div id="clicktip"></div>
+<div id="lb" onclick="lbClose()">
+ <div id="lbwrap">
+  <div id="lborigbox">
+   <img id="lborig" onmouseenter="lbOrigHover(true)" onmouseleave="lbOrigHover(false)" title="original — le survol affiche l'image globale de ce personnage">
+   <div class="lbcapmini" id="lborigcap">original</div>
+   <div id="lbselbox"><img id="lbsel" onclick="event.stopPropagation();lbGotoSel()" title="sélection pour ce style — clic : afficher cette image"><div class="lbcapmini" id="lbselcap">sélection actuelle</div></div>
+  </div>
+  <div id="lbimgbox">
+   <img id="lbimg" data-tipdelay="250">
+   <div id="lbicons" onclick="event.stopPropagation()">
+    <button onclick="lbOpen('folder')" title="ouvrir le dossier dans l'explorateur">📂</button>
+    <button onclick="lbOpen('file')" title="ouvrir l'image dans le visualiseur système">🖼</button>
+   </div>
+   <div class="lbcapmini" id="lbres"></div>
+  </div>
+ </div>
+ <div id="lbRowNav" onclick="event.stopPropagation()">
+  <button id="lbRowPrev" onclick="lbRowNav(-1)" title="revenir au personnage précédent (Ctrl+←)">⏮</button>
+  <button id="lbRowNext" onclick="lbRowNav(1)" title="passer au personnage suivant (Ctrl+→)">⏭</button>
+ </div>
+ <div id="lbCtrls" onclick="event.stopPropagation()">
+  <button id="lbCloseBtn" onclick="lbClose()" title="fermer (Échap)">✕</button>
+  <div id="lbdartist"></div>
+  <div id="lbCtrlRow">
+   <div id="lbBgSel" title="couleur du fond derrière les images">
+    <button data-bg="white" onclick="lbSetBg('white')"></button>
+    <button data-bg="grey" onclick="lbSetBg('grey')"></button>
+    <button data-bg="black" onclick="lbSetBg('black')"></button>
+   </div>
+   <button id="lbModeBtn" onclick="lbToggleMode()" title="basculer entre l'affichage classique et l'affichage dense (A original · B globale · C sélection · D consultée)">▦</button>
+  </div>
+ </div>
+ <div id="lbwords" onclick="event.stopPropagation()"></div>
+ <div id="lbdense" onclick="event.stopPropagation()">
+  <div class="lbdgrid">
+   <div class="lbdcell"><img id="lbdA" title="original"></div>
+   <div class="lbdcell"><img id="lbdB" onclick="lbdGoto('B')"><div class="lbdempty" id="lbdemptyB">pas d'image globale</div></div>
+   <div class="lbdcell"><img id="lbdC" onclick="lbdGoto('C')"><div class="lbdempty" id="lbdemptyC">pas de sélection pour ce style</div></div>
+   <div class="lbdcell" id="lbdcellD"><img id="lbdD" data-tipdelay="250"></div>
+  </div>
+  <div class="lbdside">
+   <div id="lbdlow">
+    <div id="lbdbtns"></div>
+   </div>
+  </div>
+ </div>
+ <div id="lbbar" onclick="event.stopPropagation()">
+  <div class="lbrow">
+   <button id="lbPrev" onclick="lbNav(-1)" title="image précédente — raccourci : ← ou molette · Ctrl+← : personnage précédent">◀</button>
+   <span id="lbCount"></span>
+   <button id="lbNext" onclick="lbNav(1)" title="image suivante — raccourci : → ou molette · Ctrl+→ : personnage suivant">▶</button>
+   <button id="lbSel" onclick="lbSelect()" title="raccourci : Entrée ou ↑">✓ Sélectionner cette image</button>
+   <button id="lbGlobal" onclick="lbSetGlobal()" title="cette image sera celle exportée pour ce personnage dans la Sélection globale (tous styles confondus)">☆ Définir comme globale</button>
+   <button id="lbRegen" onclick="lbRegen(event)" title="régénérer avec les paramètres utilisés pour CETTE image">⟳ Regénération</button>
+   <button id="lbCustom" onclick="lbCustom(event)" title="denoise, quantité, prompts, LoRA/ControlNet">⚙ Custom</button>
+   <button id="lbDel" onclick="lbDelete()" title="supprimer cette image — raccourci : Suppr ou ↓">🗑 Supprimer</button>
+  </div>
+ </div></div>
+
+<div id="pop">
+ <h3 id="popTitle">Régénérer</h3>
+ <div class="qty"><label>Quantité :</label>
+  <button onclick="qty(-1)">−</button><input id="popQty" type="number" min="1" max="10" value="5"><button onclick="qty(1)">+</button>
+ </div>
+ <div id="popStyleParams">
+ <div style="margin:6px 0"><label>Base : <b id="popBase" style="color:#8fd"></b> — Checkpoint :</label>
+  <input id="popCkptF" class="selfilter" style="width:100%;box-sizing:border-box;margin-top:3px" placeholder="🔍 filtrer les checkpoints" oninput="fillPopCkpt()">
+  <select id="popCkpt" style="width:100%;margin-top:3px"></select>
+ </div>
+ <div id="popLoras" style="margin:6px 0"></div>
+ <div id="popCustomXtra" style="display:none;margin:6px 0"></div>
+ <div class="qty" style="margin:8px 0"><label>Presets :</label>
+  <button id="ppBoost" onclick="popPreset('boost')" title="denoise ≥ 0.75, ControlNet allégé (0.35 / fin 0.6), LoRA +0.1 — le style de l'artiste s'exprime beaucoup plus fortement, ressemblance un peu réduite">🔥 Style renforcé</button>
+  <button id="ppStd" onclick="popPreset('std')" title="réglages d'origine : denoise 0.70, ControlNet 0.5 / fin 0.75, LoRA 0.9 — bon équilibre style / fidélité au portrait">⚖️ Équilibré</button>
+ </div>
+ <label>Denoise : <span id="dnval">0.70</span></label>
+ <input id="popDn" type="range" min="0" max="1" step="0.05" value="0.7" oninput="dnExplain()">
+ <div id="dnexpl"></div>
+ <div class="qty"><label style="width:110px">Force LoRA</label><input id="popLora" type="number" step="0.05" min="0" max="1.5"></div>
+ <div class="qty"><label style="width:110px">ControlNet</label><input id="popCnet" type="number" step="0.05" min="0" max="1"></div>
+ <div class="qty"><label style="width:110px">ControlNet fin</label><input id="popCend" type="number" step="0.05" min="0" max="1"></div>
+ <div class="qty" id="popSeedRow"><label title="vide = aléatoire ; fixer une seed permet de reproduire/varier finement une image">Seed (vide = aléatoire) :</label>
+  <input id="popSeed" type="number" min="0" style="width:130px">
+  <label id="popSeedReuseWrap" style="display:none;cursor:pointer" title="reprendre la seed exacte de l'image consultée"><input type="checkbox" id="popSeedReuse" onchange="popSeedReuseToggle()"> même seed</label></div>
+ <label style="display:flex;align-items:center;gap:6px;margin:6px 0"><input type="checkbox" id="popMemo" checked> Mémoriser LoRA / denoise / ControlNet pour ce style</label>
+ </div>
+ <label>Ajouter au prompt positif (fin de prompt) :</label>
+ <textarea id="popPos" placeholder="ex: smiling, red scarf, freckles"></textarea>
+ <label>Ajouter au prompt négatif (fin de prompt) :</label>
+ <textarea id="popNeg" placeholder="ex: hat, beard, angry"></textarea>
+ <div class="actions"><button onclick="hidePop()">Annuler</button>
+ <button id="popPrio" onclick="launchRegen(true)" title="passe devant tout ce qui est déjà en file d'attente">⚡ Générer en priorité</button>
+ <button class="primary" onclick="launchRegen()">Lancer</button></div>
+</div>
+
+<script src="/static/app.js"></script></body></html>
