@@ -28,6 +28,7 @@ function buildStyleSel(){
 }
 async function load(){
   await refresh();
+  i18nInit((S.settings&&S.settings.lang)||'fr');
   applyThumbSize();
   buildStyleSel();
   document.getElementById('styleSel').onchange=async(e)=>{style=e.target.value;popSyncStyle();const y=window.scrollY;await refresh();render();window.scrollTo(0,y);};
@@ -60,7 +61,7 @@ async function load(){
   }else{
     setMode('matrix');
   }
-  pollStatus();
+  startQueueFeed();
   /* le dernier jeu utilise est reouvert automatiquement ; le choix ne
      s'affiche au demarrage que s'il n'y a aucun jeu configure */
   if(!S.games||!S.games.length){gameOpen();gameAddToggle(true);}
@@ -163,7 +164,7 @@ async function setMode(m){
   _restoreScroll(m);
   if(prev==='tri'&&m!=='tri'&&S&&!S.tags_done&&!_taggerAsked){
     _taggerAsked=true;
-    if(confirm('Les portraits de ce jeu n\'ont jamais été analysés (tags auto : couleurs de cheveux, yeux, accessoires — améliore la fidélité des générations).\n\nLancer l\'analyse maintenant ? (~1-2 min, en arrière-plan)')){
+    if(confirm(T('Les portraits de ce jeu n\'ont jamais été analysés (tags auto : couleurs de cheveux, yeux, accessoires — améliore la fidélité des générations).\n\nLancer l\'analyse maintenant ? (~1-2 min, en arrière-plan)'))){
       runTagger();
     }
   }
@@ -1160,6 +1161,8 @@ function optOpen(){
   document.getElementById('optAutoTags').checked=(s.use_auto_tags!==false);
   document.getElementById('optTagThr').value=s.tag_threshold||0.35;
   document.getElementById('optAntiHalo').checked=(s.anti_halo!==false);
+  document.getElementById('optNotify').checked=!!s.notify_done;
+  document.getElementById('optLang').value=s.lang||'fr';
   document.getElementById('optBackup').checked=(s.pack_backup!==false);
   document.getElementById('optPPrefix').value=(S.defaults&&S.defaults.pony_prefix)||'';
   document.getElementById('optPNeg').value=(S.defaults&&S.defaults.pony_negative)||'';
@@ -1188,6 +1191,21 @@ function optOpen(){
   document.getElementById('optpop').style.display='block';
 }
 function optClose(){document.getElementById('optpop').style.display='none';}
+/* changement de langue : enregistre puis recharge (toute l'UI est retraduite) */
+async function optLangChange(){
+  const v=document.getElementById('optLang').value;
+  await fetch('/api/settings',{method:'POST',body:JSON.stringify({lang:v})});
+  location.reload();
+}
+/* case "notification Windows" : demande la permission navigateur a l'activation */
+async function optNotifyToggle(){
+  const cb=document.getElementById('optNotify');
+  if(cb.checked&&'Notification' in window&&Notification.permission!=='granted'){
+    const p=await Notification.requestPermission();
+    if(p!=='granted'){cb.checked=false;toast('⚠ Notifications refusées par le navigateur');}
+  }
+  optSave();
+}
 function optTab(t){
   for(const k of ['G','N','P','A','C','K']){
     document.getElementById('osec'+k).style.display=(k===t)?'':'none';
@@ -1223,6 +1241,7 @@ async function optSave(){
     use_auto_tags:document.getElementById('optAutoTags').checked,
     tag_threshold:+document.getElementById('optTagThr').value||0.35,
     anti_halo:document.getElementById('optAntiHalo').checked,
+    notify_done:document.getElementById('optNotify').checked,
     pack_backup:document.getElementById('optBackup').checked};
   await fetch('/api/settings',{method:'POST',body:JSON.stringify(payload)});
   S.settings=Object.assign(S.settings||{},payload);
@@ -1281,7 +1300,7 @@ function applyThumbSize(){
 }
 async function restoreOriginals(){
   const r=await (await fetch('/api/restore_originals',{method:'POST'})).json();
-  alert(r.pack_found?(r.restored+' portraits d\'origine restaurés dans le pack'):'Répertoire du pack introuvable — vérifie le chemin dans les options');
+  alert(T(r.pack_found?(r.restored+' portraits d\'origine restaurés dans le pack'):'Répertoire du pack introuvable — vérifie le chemin dans les options'));
 }
 document.addEventListener('click',e=>{
   if(!e.target.closest('#ctx'))hideCtx();
@@ -1526,7 +1545,8 @@ async function progUpdate(){
             cell.setAttribute('data-ref',k);
             cell.setAttribute('data-tip','clic gauche : fiche du perso · clic droit : zoom');
             cell.onclick=((st,sm)=>()=>gotoDetail(st,sm))(it.style,it.stem);
-            cell.innerHTML='<img class="thumb" loading="lazy" src="/thumb/var/'+k+'">'+
+            cell.innerHTML='<button class="pgdel" title="supprimer cette image (annulable : lien du toast ou Ctrl+Z)" onclick="progDel(event,this)">✕</button>'+
+              '<img class="thumb" loading="lazy" src="/thumb/var/'+k+'">'+
               '<div class="pgcap">'+styleLabel(it.style)+'</div>';
           }
           frag.appendChild(cell);
@@ -1535,6 +1555,15 @@ async function progUpdate(){
       }
     }
   }catch(e){}
+}
+/* bouton ✕ d'une vignette du mur Génération : suppression (corbeille, annulable) */
+async function progDel(ev,btn){
+  ev.stopPropagation();ev.preventDefault();
+  const cell=btn.closest('.pgcell');
+  const [sk,stem,f]=cell.dataset.k.split('/');
+  cell.remove();            /* retrait immediat, le poll resynchronise ensuite */
+  _progWallKey='';
+  await deleteVariant(sk,stem,f);
 }
 
 /* ---------- tri ---------- */
@@ -1712,7 +1741,7 @@ async function autoSelect(){
 }
 async function genAll(){
   const r=await (await fetch('/api/regen_all',{method:'POST',body:JSON.stringify({style:style})})).json();
-  alert(r.queued+' générations mises en file (tous les personnages)');
+  alert(T(r.queued+' générations mises en file (tous les personnages)'));
 }
 async function deleteStyleImages(onlyUnselected){
   let total=0,selected=0;
@@ -1725,23 +1754,47 @@ async function deleteStyleImages(onlyUnselected){
   const toDelete=onlyUnselected?(total-selected):total;
   if(!toDelete){toast('Rien à supprimer');return;}
   const msg=onlyUnselected
-    ?('Supprimer les '+toDelete+' images NON sélectionnées de « '+styleLabel(style)+' » ?\n(les '+selected+' images sélectionnées sont conservées)')
-    :('Supprimer TOUTES les images générées de « '+styleLabel(style)+' » ('+toDelete+' images) ?\nLes originaux sont conservés.');
-  if(!confirm(msg)) return;
+    ?('Supprimer les '+toDelete+' images NON sélectionnées de « '+styleLabel(style)+' » ?\n(les '+selected+' images sélectionnées sont conservées)\n\nElles vont dans la corbeille de l\'app (restaurables 7 jours).')
+    :('Supprimer TOUTES les images générées de « '+styleLabel(style)+' » ('+toDelete+' images) ?\nLes originaux sont conservés.\n\nElles vont dans la corbeille de l\'app (restaurables 7 jours).');
+  if(!confirm(T(msg))) return;
   const r=await (await fetch('/api/delete_style',{method:'POST',body:JSON.stringify(
     {style:style,only_unselected:onlyUnselected})})).json();
   await refresh(); render();
-  toast('🗑 '+r.deleted+' images supprimées');
+  toast('🗑 '+r.deleted+' images mises à la corbeille (_appdata/trash, 7 jours)');
 }
 async function regenMissing(){
   const r=await (await fetch('/api/regen_missing',{method:'POST',body:JSON.stringify({style:style})})).json();
-  alert(r.queued+' générations mises en file (personnages sans sélection)');
+  alert(T(r.queued+' générations mises en file (personnages sans sélection)'));
 }
-async function exportSel(){
+/* rapport de complétude : persos sans aucune image exportable (ni choix
+   explicite ni choix auto) — proposé avant un export global */
+function showExportReport(missing){
+  let h='<h3>⚠ Export incomplet — '+missing.length+' personnage'+(missing.length>1?'s':'')+' sans image choisie'+
+    ' <span style="font-size:12px;color:#9ab;font-weight:normal">(clic sur un personnage : ouvrir toutes ses versions)</span></h3>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:10px">';
+  for(const p of missing){
+    h+='<div class="vcell" style="width:110px;text-align:center" onclick="verOpenAll(event,\''+p.stem+'\')">'+
+      '<img class="thumb" loading="lazy" src="/thumb/original/'+p.stem+'" style="width:110px;height:110px;object-fit:contain">'+
+      '<div style="font-size:10px;color:#9ab;overflow:hidden;text-overflow:ellipsis">'+p.stem+'</div></div>';
+  }
+  h+='</div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">'+
+    '<button onclick="verClose()">Annuler</button>'+
+    '<button class="primary" onclick="verClose();exportSel(true)">Exporter quand même ('+
+      (S.portraits.length-missing.length)+' portraits)</button></div>';
+  const vp=document.getElementById('verpop');
+  vp.innerHTML=h; vp.style.display='block'; vp.scrollTop=0;
+  document.getElementById('verpopbg').style.display='block';
+}
+async function exportSel(force){
   const btn=document.getElementById('btnExport');
   if(btn.disabled) return;
   const lbl=document.getElementById('expLabel');
   const old=lbl.textContent;
+  /* export global : verifier la completude d'abord */
+  if(mode!=='detail'&&!force){
+    const missing=S.portraits.filter(p=>!finalChoice(p.stem));
+    if(missing.length){showExportReport(missing);return;}
+  }
   btn.disabled=true;btn.style.opacity='.55';
   lbl.textContent='⏳ Export en cours…';
   try{
@@ -1801,9 +1854,24 @@ function fmtDur(s){
   if(s>=3600) return Math.floor(s/3600)+'h '+String(Math.floor((s%3600)/60)).padStart(2,'0')+'min';
   return s>=60?(Math.floor(s/60)+'min '+String(s%60).padStart(2,'0')+'s'):(s+'s');
 }
+/* flux temps reel : SSE (/api/events) pousse l'etat des que la file change ;
+   repli sur le polling 2 s si EventSource indisponible */
+let _es=null;
+function startQueueFeed(){
+  if(!window.EventSource){pollStatus();return;}
+  _es=new EventSource('/api/events');
+  _es.onmessage=e=>{try{applyQueueStatus(JSON.parse(e.data));}catch(_){}};
+  /* en cas d'erreur, EventSource retente tout seul (serveur redemarre...) */
+}
 async function pollStatus(){
   try{
     const q=await (await fetch('/api/queue')).json();
+    await applyQueueStatus(q);
+  }catch(e){}
+  setTimeout(pollStatus,2000);
+}
+async function applyQueueStatus(q){
+  try{
     qPaused=!!q.paused;
     const active=q.pending>0||q.current;
     document.getElementById('btnPause').style.display=active?'inline-block':'none';
@@ -1843,14 +1911,24 @@ async function pollStatus(){
       clearTimeout(t._tm);
       t._tm=setTimeout(()=>{t.style.opacity='0';t.style.pointerEvents='none';},15000);
     }
-    if(now===0&&lastQ>0) playDone(); /* toutes les generations sont terminees */
+    if(now===0&&lastQ>0){playDone();notifyDone();} /* toutes les generations sont terminees */
     document.getElementById('tabP').innerHTML='Génération'+(now>0?' <span class="busyDot">⏳</span>':'');
     if(mode==='prog'){progUpdate();}
     else if(now===0&&lastQ!==0&&lastQ!==-1){await refresh();render();}
     else if(now<lastQ){await refresh();render();}
     lastQ=now;
   }catch(e){}
-  setTimeout(pollStatus,2000);
+}
+/* notification systeme (Windows) en fin de file — optionnelle (Options) */
+function notifyDone(){
+  if(!(S.settings&&S.settings.notify_done)) return;
+  if(!('Notification' in window)||Notification.permission!=='granted') return;
+  try{
+    const n=new Notification('PortraitForge',{
+      body:'✅ Toutes les générations sont terminées.',
+      icon:'/app.ico', tag:'pf-done'});
+    n.onclick=()=>{window.focus();n.close();};
+  }catch(e){}
 }
 /* carillon doux (do-mi-sol) quand toute la file de generation est terminee */
 let _audioCtx=null;
@@ -2350,7 +2428,8 @@ document.addEventListener('keydown',e=>{
     if(e.key==='Escape') e.target.blur();
     return;
   }
-  if(e.key==='Escape'){hidePop();lbClose();hideCtx();verClose();optClose();return;}
+  if(e.key==='Escape'){hidePop();lbClose();hideCtx();verClose();optClose();helpClose();return;}
+  if(e.key==='?'){e.preventDefault();helpOpen();return;}
   /* Ctrl+Z : restaurer la derniere image supprimee */
   if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&(e.key==='z'||e.key==='Z')){
     e.preventDefault();undoDelete();return;
@@ -2377,6 +2456,40 @@ document.addEventListener('keydown',e=>{
     else if(e.key==='ArrowRight'){e.preventDefault();verNav(1);}
   }
 });
+/* ---------- aide : raccourcis clavier (bouton ? ou touche ?) ---------- */
+function helpOpen(){
+  const row=(k,txt)=>'<tr><td class="hk">'+k+'</td><td>'+txt+'</td></tr>';
+  document.getElementById('helppop').innerHTML=
+    '<h3>⌨ Raccourcis clavier</h3>'+
+    '<h4>Partout</h4><table class="helptbl">'+
+    row('Échap','fermer le popup / zoom / menu ouvert')+
+    row('Ctrl+Z','restaurer la dernière image supprimée')+
+    row('?','cette aide')+
+    '</table><h4>Vue d\'ensemble / Sélection globale</h4><table class="helptbl">'+
+    row('↑ ↓ ← →','faire défiler le tableau')+
+    '</table><h4>Par style</h4><table class="helptbl">'+
+    row('↑ / ↓','personnage précédent / suivant')+
+    row('← / →','style précédent / suivant')+
+    row('1 … 9','sélectionner la variante n°N du personnage courant (re-appui : désélectionner)')+
+    row('Suppr','supprimer la vignette survolée')+
+    '</table><h4>Zoom (comparaison)</h4><table class="helptbl">'+
+    row('← / →','image précédente / suivante')+
+    row('Entrée ou ↑','sélectionner l\'image affichée')+
+    row('Suppr ou ↓','supprimer l\'image affichée')+
+    row('Ctrl+← / Ctrl+→','personnage précédent / suivant (Alt : seulement ceux à ≥2 images)')+
+    row('molette','image précédente / suivante')+
+    '</table><h4>Toutes les versions</h4><table class="helptbl">'+
+    row('← / →','portrait précédent / suivant')+
+    '</table>'+
+    '<div style="display:flex;justify-content:flex-end;margin-top:12px"><button onclick="helpClose()">Fermer</button></div>';
+  document.getElementById('helppop').style.display='block';
+  document.getElementById('helppopbg').style.display='block';
+}
+function helpClose(){
+  const h=document.getElementById('helppop');
+  if(h){h.style.display='none';document.getElementById('helppopbg').style.display='none';}
+}
+
 /* ---------- info-bulle retardee (2 s) : actions des clics (attribut data-tip)
    + date de generation relative (attribut data-ref = style/stem/fichier) ---------- */
 const _ageCache={};

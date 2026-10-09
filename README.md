@@ -33,8 +33,10 @@ PortraitForge drives a local [ComfyUI](https://github.com/comfyanonymous/ComfyUI
 ```bash
 git clone https://github.com/hypedigger/PortraitForge.git
 cd PortraitForge
-pip install pillow onnxruntime numpy
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
+
+(or manually: `pip install -r requirements.txt`)
 
 1. Edit `launch_config.json` so `python` and `comfy_main` point at your ComfyUI install.
 2. Put your game's original portraits (PNG) in `<work_dir>/_originals/` — the app asks for the work directory on first run (🎮 button).

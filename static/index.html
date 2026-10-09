@@ -13,6 +13,7 @@
 <span id="status"></span>
 <button id="btnPause" onclick="queueCtl(qPaused?'resume':'pause')" title="mettre la file en pause / reprendre">⏸</button>
 <button id="btnClear" onclick="queueCtl('clear')" title="vider la file d'attente">🗑</button>
+<button id="btnHelp" onclick="helpOpen()" title="raccourcis clavier (touche ?)">?</button>
 <button id="btnOpt" onclick="optOpen()" title="options de l'app">⚙ Options</button>
 <div id="subbar">
  <label id="styleWrap">Style : <input id="styleFilter" class="selfilter" placeholder="🔍 filtrer" title="filtre la liste des artistes au clavier"><button class="navst" onclick="navStyle(-1)" title="style précédent">◀</button><select id="styleSel"></select><button class="navst" onclick="navStyle(1)" title="style suivant">▶</button></label>
@@ -94,6 +95,9 @@
   <div style="margin-top:6px">
    <label title="retire le voile blanc sur les bords semi-transparents des images générées"><input type="checkbox" id="optAntiHalo" checked onchange="optSave()"> Anti-halo sur les contours ⓘ</label>
   </div>
+  <div style="margin-top:6px">
+   <label title="affiche une notification Windows quand toutes les générations sont finies (demande l'autorisation du navigateur)"><input type="checkbox" id="optNotify" onchange="optNotifyToggle()"> Notification Windows en fin de génération ⓘ</label>
+  </div>
  </div>
  <div id="osecP" class="osec" style="display:none">
   <label>Préfixe qualité Pony :</label>
@@ -135,6 +139,12 @@
     <option value="petites">petites</option>
     <option value="moyennes" selected>moyennes</option>
     <option value="grandes">grandes</option>
+   </select>
+  </div>
+  <div class="qty" style="margin-top:8px"><label>Langue / Language :</label>
+   <select id="optLang" onchange="optLangChange()">
+    <option value="fr">Français</option>
+    <option value="en">English</option>
    </select>
   </div>
  </div>
@@ -230,6 +240,8 @@
 </div>
 <div id="toast"></div>
 <div id="ctx"></div>
+<div id="helppopbg" onclick="helpClose()"></div>
+<div id="helppop"></div>
 <div id="verpopbg" onclick="verClose()"></div>
 <div id="verpop"></div>
 <button id="vnavL" class="vnav" onclick="verNav(-1)" title="portrait précédent (←)">❮</button>
@@ -330,4 +342,5 @@
  <button class="primary" onclick="launchRegen()">Lancer</button></div>
 </div>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script></body></html>

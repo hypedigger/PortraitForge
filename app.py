@@ -53,7 +53,8 @@ DEFAULT_SETTINGS = {"regen_count": 2, "hidden_styles": [],
                     "use_auto_tags": True, "tag_threshold": 0.35,
                     "anti_halo": True, "pack_backup": True, "wall_size": 60,
                     "sort_portraits": "date", "sort_secondary": "date",
-                    "lb_dense": False, "lb_bg": "grey"}
+                    "lb_dense": False, "lb_bg": "grey", "notify_done": False,
+                    "lang": "fr"}
 
 
 def apply_runtime_settings(s):
@@ -211,6 +212,63 @@ def _is_conn_error(e):
     msg = str(e).lower()
     return ("urlopen error" in msg or "10061" in msg or "refus" in msg
             or "connection" in msg or isinstance(e, (ConnectionError, OSError)))
+
+
+def _trash_png(style, stem, path):
+    """Deplace une image generee vers la corbeille de l'app (restaurable).
+
+    Nom prefixe par la date d'origine (restauree par /api/undelete) ;
+    mtime du fichier corbeille = maintenant (base de la purge 7 jours)."""
+    trash_dir = os.path.join(xs.PROJECT_DIR, "_appdata", "trash", style, stem)
+    os.makedirs(trash_dir, exist_ok=True)
+    tname = "%d__%s" % (int(os.path.getmtime(path)), os.path.basename(path))
+    dest = os.path.join(trash_dir, tname)
+    if os.path.exists(dest):
+        base, ext = os.path.splitext(tname)
+        k = 2
+        while os.path.exists(dest):
+            dest = os.path.join(trash_dir, "%s_%d%s" % (base, k, ext))
+            k += 1
+    os.replace(path, dest)
+    os.utime(dest, None)
+
+
+def _queue_status():
+    """Etat de la file (partage entre /api/queue et le flux SSE /api/events)."""
+    with _queue_lock:
+        cur = ("%s/%s" % (_current["style"], _current["stem"])) if _current else None
+        t0 = _job_t0
+        pby = {}
+        pkeys = {}
+        for j in _queue:
+            pby[j["style"]] = pby.get(j["style"], 0) + 1
+            k = "%s/%s" % (j["style"], j["stem"])
+            pkeys[k] = pkeys.get(k, 0) + 1
+        if cur:
+            pkeys[cur] = pkeys.get(cur, 0) + 1
+        return {"pending": len(_queue), "current": cur,
+                "pending_keys": pkeys,
+                "errors": _errors,
+                "elapsed": (time.time() - t0) if (cur and t0) else 0,
+                "avg": (sum(_durations) / len(_durations)) if _durations else None,
+                "batch_done": _batch_done,
+                "batch_total": _batch_total,
+                "pending_by_style": pby,
+                "paused": _paused}
+
+
+def _purge_trash():
+    """Supprime definitivement les elements en corbeille depuis plus de 7 jours."""
+    troot = os.path.join(xs.PROJECT_DIR, "_appdata", "trash")
+    cutoff = time.time() - 7 * 86400
+    for r_, _d, fs in os.walk(troot):
+        for f0 in fs:
+            p0 = os.path.join(r_, f0)
+            try:
+                if os.path.getmtime(p0) < cutoff:
+                    os.remove(p0)
+            except OSError:
+                pass
 
 
 def _enqueue(jobs, front=False):
@@ -401,6 +459,23 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_static("app.css", "text/css; charset=utf-8")
         elif p == "/static/app.js":
             self._serve_static("app.js", "text/javascript; charset=utf-8")
+        elif p == "/static/i18n.js":
+            self._serve_static("i18n.js", "text/javascript; charset=utf-8")
+        elif p == "/app.ico":
+            # icone de l'app (notifications) — hors work_dir, donc pas _file()
+            ico = os.path.join(xs.APP_DIR, "app.ico")
+            if not os.path.exists(ico):
+                self.send_response(404)
+                self.end_headers()
+                return
+            with open(ico, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/x-icon")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "max-age=86400")
+            self.end_headers()
+            self.wfile.write(data)
         elif p == "/api/state":
             cfg = xs.load_styles()
             d = cfg["defaults"]
@@ -441,26 +516,39 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"running": running,
                         "tagged": len(xs.load_portrait_tags())})
         elif p == "/api/queue":
-            with _queue_lock:
-                cur = ("%s/%s" % (_current["style"], _current["stem"])) if _current else None
-                t0 = _job_t0
-                pby = {}
-                pkeys = {}
-                for j in _queue:
-                    pby[j["style"]] = pby.get(j["style"], 0) + 1
-                    k = "%s/%s" % (j["style"], j["stem"])
-                    pkeys[k] = pkeys.get(k, 0) + 1
-                if cur:
-                    pkeys[cur] = pkeys.get(cur, 0) + 1
-                self._json({"pending": len(_queue), "current": cur,
-                            "pending_keys": pkeys,
-                            "errors": _errors,
-                            "elapsed": (time.time() - t0) if (cur and t0) else 0,
-                            "avg": (sum(_durations) / len(_durations)) if _durations else None,
-                            "batch_done": _batch_done,
-                            "batch_total": _batch_total,
-                            "pending_by_style": pby,
-                            "paused": _paused})
+            self._json(_queue_status())
+        elif p == "/api/events":
+            # Server-Sent Events : pousse l'etat de la file des qu'il change
+            # (plus un battement de coeur toutes les ~10 s). Remplace le
+            # polling cote client ; un thread par client connecte.
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+            last = None
+            beat = 0.0
+            try:
+                while True:
+                    st = _queue_status()
+                    # l'elapsed bouge en continu : on ne reveille le client
+                    # que sur vrai changement (ou toutes les secondes si un
+                    # job tourne, pour le chrono)
+                    key = (st["pending"], st["current"], st["paused"],
+                           st["batch_done"], st["batch_total"],
+                           int(st["elapsed"]))
+                    now = time.time()
+                    if key != last or now - beat > 10:
+                        last = key
+                        beat = now
+                        payload = json.dumps(st)
+                        self.wfile.write(("data: " + payload + "\n\n").encode("utf-8"))
+                        self.wfile.flush()
+                    time.sleep(0.4)
+            except (BrokenPipeError, ConnectionAbortedError,
+                    ConnectionResetError, OSError):
+                pass
+            return
         elif p == "/api/checkpoints":
             try:
                 names = xs._get_json("/models/checkpoints")
@@ -972,11 +1060,13 @@ class Handler(BaseHTTPRequestHandler):
                 for f in os.listdir(vdir):
                     if not f.endswith(".png") or f == keep:
                         continue
-                    os.remove(os.path.join(vdir, f))
+                    # corbeille (restaurable 7 jours), comme /api/delete
+                    _trash_png(sk, stem, os.path.join(vdir, f))
                     n += 1
                 if not only_unsel and sel.get(key):
                     sel[key] = None
             xs.save_selections(sel)
+            _purge_trash()
             self._json({"ok": True, "deleted": n})
         elif p == "/api/delete_all":
             vdir = os.path.abspath(os.path.join(
@@ -988,13 +1078,16 @@ class Handler(BaseHTTPRequestHandler):
             n = 0
             for f in os.listdir(vdir):
                 if f.endswith(".png"):
-                    os.remove(os.path.join(vdir, f))
+                    # corbeille (restaurable 7 jours), comme /api/delete
+                    _trash_png(body["style"], body["stem"],
+                               os.path.join(vdir, f))
                     n += 1
             key = "%s/%s" % (body["style"], body["stem"])
             sel = xs.load_selections()
             if sel.get(key):
                 sel[key] = None
                 xs.save_selections(sel)
+            _purge_trash()
             self._json({"ok": True, "deleted": n})
         elif p == "/api/open":
             url = urllib.parse.unquote(body.get("url", ""))
