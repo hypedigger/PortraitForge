@@ -54,7 +54,7 @@ DEFAULT_SETTINGS = {"regen_count": 2, "hidden_styles": [],
                     "anti_halo": True, "pack_backup": True, "wall_size": 60,
                     "sort_portraits": "date", "sort_secondary": "date",
                     "lb_dense": False, "lb_bg": "grey", "notify_done": False,
-                    "lang": "fr"}
+                    "lang": "fr", "user_presets": {}}
 
 
 def apply_runtime_settings(s):
@@ -120,6 +120,7 @@ _current = None
 _errors = []
 _job_t0 = None
 _durations = []
+_style_durations = {}  # {style: [durees]} pour la page sante
 _batch_total = 0
 _batch_done = 0
 _paused = False
@@ -155,6 +156,9 @@ def _restore_queue():
     jobs = st.get("jobs") or []
     if not jobs:
         return
+    global _job_seq
+    _job_seq = max([j.get("id") or 0 for j in jobs] + [0])
+    _tag_jobs(jobs)
     _queue.extend(jobs)
     _batch_total = st.get("batch_total") or len(jobs)
     _batch_done = st.get("batch_done") or 0
@@ -257,6 +261,65 @@ def _queue_status():
                 "paused": _paused}
 
 
+def _dir_size(path):
+    total = 0
+    for r_, _d, fs in os.walk(path):
+        for f in fs:
+            try:
+                total += os.path.getsize(os.path.join(r_, f))
+            except OSError:
+                pass
+    return total
+
+
+def _thumb_cleanup():
+    """Supprime les miniatures orphelines (source disparue ou jeu supprime).
+
+    Renvoie (nb de fichiers supprimes, octets liberes)."""
+    root = os.path.join(xs.APP_DIR, ".thumbs")
+    if not os.path.isdir(root):
+        return 0, 0
+    games = {g["id"]: g["work_dir"] for g in xs.load_games()["games"]}
+    removed, freed = 0, 0
+
+    def _rm(p0):
+        nonlocal removed, freed
+        try:
+            freed += os.path.getsize(p0)
+            os.remove(p0)
+            removed += 1
+        except OSError:
+            pass
+
+    for gid in os.listdir(root):
+        gdir = os.path.join(root, gid)
+        if not os.path.isdir(gdir):
+            continue
+        work = games.get(gid)
+        if not work:
+            for r_, _d, fs in os.walk(gdir):
+                for f in fs:
+                    _rm(os.path.join(r_, f))
+            continue
+        for sub in os.listdir(gdir):
+            sdir = os.path.join(gdir, sub)
+            if not os.path.isdir(sdir):
+                continue
+            for f in os.listdir(sdir):
+                if not f.lower().endswith(".png"):
+                    continue
+                base = f[:-4]
+                if sub == "_originals":
+                    src = os.path.join(work, "_originals", base + ".png")
+                else:
+                    stem, _, rest = base.partition("__")
+                    src = os.path.join(work, "stylized", sub, stem,
+                                       rest + ".png") if rest else ""
+                if not src or not os.path.exists(src):
+                    _rm(os.path.join(sdir, f))
+    return removed, freed
+
+
 def _purge_trash():
     """Supprime definitivement les elements en corbeille depuis plus de 7 jours."""
     troot = os.path.join(xs.PROJECT_DIR, "_appdata", "trash")
@@ -271,10 +334,23 @@ def _purge_trash():
                 pass
 
 
+_job_seq = 0
+
+
+def _tag_jobs(jobs):
+    """Identifiant stable par job (annulation / reordonnancement cibles)."""
+    global _job_seq
+    for j in jobs:
+        if not j.get("id"):
+            _job_seq += 1
+            j["id"] = _job_seq
+
+
 def _enqueue(jobs, front=False):
     """Ajoute des jobs (front=True : prioritaires, passent devant les batches)."""
     global _batch_total, _batch_done
     with _queue_lock:
+        _tag_jobs(jobs)
         if not _queue and _current is None:
             _batch_total = 0
             _batch_done = 0
@@ -342,6 +418,10 @@ def _worker():
                                     lora_enabled=job.get("lora_enabled", True))
             _durations.append(time.time() - _job_t0)
             del _durations[:-10]
+            # temps moyens par style (page sante)
+            _style_durations.setdefault(job["style"], []).append(
+                time.time() - _job_t0)
+            del _style_durations[job["style"]][:-20]
         except Exception as e:
             if _is_conn_error(e):
                 # connexion ComfyUI perdue EN COURS de job : le job n'est pas
@@ -366,6 +446,20 @@ def _worker():
 
 _restore_queue()
 threading.Thread(target=_worker, daemon=True).start()
+
+
+def _startup_maintenance():
+    """Purge des miniatures orphelines au demarrage (en arriere-plan)."""
+    time.sleep(10)
+    try:
+        n, b = _thumb_cleanup()
+        if n:
+            print("miniatures orphelines purgees : %d (%.1f Mo)" % (n, b / 1e6))
+    except Exception:
+        pass
+
+
+threading.Thread(target=_startup_maintenance, daemon=True).start()
 
 
 def list_variants():
@@ -461,6 +555,8 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_static("app.js", "text/javascript; charset=utf-8")
         elif p == "/static/i18n.js":
             self._serve_static("i18n.js", "text/javascript; charset=utf-8")
+        elif p.startswith("/contact_sheet.png"):
+            self._file(os.path.join(xs.EXPORT_DIR, "contact_sheet.png"))
         elif p == "/app.ico":
             # icone de l'app (notifications) — hors work_dir, donc pas _file()
             ico = os.path.join(xs.APP_DIR, "app.ico")
@@ -500,6 +596,7 @@ class Handler(BaseHTTPRequestHandler):
                         "excluded": sorted(xs.load_excluded()),
                         "order": xs.load_order(),
                         "meta": xs.load_portrait_meta(),
+                        "words": xs.load_portrait_words(),
                         "final": xs.load_final(),
                         "settings": load_settings(),
                         "game": xs.current_game(),
@@ -517,6 +614,35 @@ class Handler(BaseHTTPRequestHandler):
                         "tagged": len(xs.load_portrait_tags())})
         elif p == "/api/queue":
             self._json(_queue_status())
+        elif p == "/api/health":
+            # page sante : etat ComfyUI, VRAM, temps moyens, tailles des caches
+            alive = xs.comfy_alive()
+            vram = None
+            dev = None
+            if alive:
+                try:
+                    st = xs._get_json("/system_stats")
+                    g = (st.get("devices") or [{}])[0]
+                    dev = g.get("name")
+                    vram = {"free": g.get("vram_free"),
+                            "total": g.get("vram_total")}
+                except Exception:
+                    pass
+            savg = {k: sum(v) / len(v)
+                    for k, v in _style_durations.items() if v}
+            self._json({"comfy_alive": alive, "comfy_url": xs.COMFY_URL,
+                        "device": dev, "vram": vram, "style_avg": savg,
+                        "thumbs_bytes": _dir_size(
+                            os.path.join(xs.APP_DIR, ".thumbs")),
+                        "trash_bytes": _dir_size(
+                            os.path.join(xs.PROJECT_DIR, "_appdata", "trash")),
+                        "errors": _errors[-5:]})
+        elif p == "/api/queue_jobs":
+            # liste detaillee des jobs en attente (annulation / reordonnancement)
+            with _queue_lock:
+                jobs = [{"id": j.get("id"), "style": j.get("style"),
+                         "stem": j.get("stem")} for j in _queue]
+            self._json({"jobs": jobs})
         elif p == "/api/events":
             # Server-Sent Events : pousse l'etat de la file des qu'il change
             # (plus un battement de coeur toutes les ~10 s). Remplace le
@@ -1031,6 +1157,87 @@ class Handler(BaseHTTPRequestHandler):
             if orig_mtime:
                 os.utime(dest, (orig_mtime, orig_mtime))
             self._json({"ok": True, "file": os.path.basename(dest)})
+        elif p == "/api/contact_sheet":
+            # planche contact avant/apres : paires (original, image choisie)
+            items = body.get("items") or []
+            cell = 256
+            pad = 6
+            cols = max(2, min(16, int(body.get("cols") or 8)))
+            rows = (len(items) + cols - 1) // cols
+            W = cols * (cell + pad) + pad
+            H = rows * (2 * cell + 3 * pad)
+            sheet = Image.new("RGB", (max(W, cell), max(H, cell)), (18, 20, 26))
+            for i, it in enumerate(items):
+                x = pad + (i % cols) * (cell + pad)
+                y = pad + (i // cols) * (2 * cell + 3 * pad)
+                orig = os.path.join(xs.ORIGINALS_DIR, it["stem"] + ".png")
+                if it.get("original"):
+                    pair = [orig, orig]
+                else:
+                    pair = [orig, os.path.join(
+                        xs.STYLIZED_DIR, it.get("style", ""),
+                        it["stem"], os.path.basename(it.get("file", "")))]
+                for k, pth in enumerate(pair):
+                    try:
+                        with Image.open(pth) as im:
+                            im = im.convert("RGBA")
+                            im.thumbnail((cell, cell), Image.LANCZOS)
+                            bg = Image.new("RGBA", (cell, cell),
+                                           (18, 20, 26, 255))
+                            bg.paste(im, ((cell - im.width) // 2,
+                                          (cell - im.height) // 2), im)
+                            sheet.paste(bg.convert("RGB"),
+                                        (x, y + k * (cell + pad)))
+                    except Exception:
+                        pass
+            os.makedirs(xs.EXPORT_DIR, exist_ok=True)
+            out = os.path.join(xs.EXPORT_DIR, "contact_sheet.png")
+            sheet.save(out)
+            self._json({"ok": True, "path": out, "count": len(items)})
+        elif p == "/api/thumb_cleanup":
+            n, b = _thumb_cleanup()
+            self._json({"ok": True, "removed": n, "freed": b})
+        elif p == "/api/queue_edit":
+            # agir sur UN job en attente : cancel / front / move (avant before_id)
+            # (_batch_total est deja declare global plus haut dans do_POST)
+            op = body.get("op")
+            jid = body.get("id")
+            with _queue_lock:
+                idx = next((i for i, j in enumerate(_queue)
+                            if j.get("id") == jid), None)
+                if idx is None:
+                    self._json({"ok": False, "error": "job introuvable"}, 404)
+                    return
+                job = _queue.pop(idx)
+                if op == "cancel":
+                    _batch_total = max(0, _batch_total - 1)
+                elif op == "front":
+                    _queue.insert(0, job)
+                elif op == "move":
+                    bidx = next((i for i, j in enumerate(_queue)
+                                 if j.get("id") == body.get("before_id")), None)
+                    if bidx is None:
+                        _queue.append(job)
+                    else:
+                        _queue.insert(bidx, job)
+                else:
+                    _queue.insert(idx, job)
+                    self._json({"ok": False, "error": "op inconnue"}, 400)
+                    return
+            _persist_queue()
+            self._json({"ok": True, "pending": len(_queue)})
+        elif p == "/api/words":
+            # mots memorises par personnage (ajoutes a toutes ses generations)
+            words = xs.load_portrait_words()
+            stem = body["stem"]
+            pos = (body.get("pos") or "").strip(" ,")
+            neg = (body.get("neg") or "").strip(" ,")
+            if pos or neg:
+                words[stem] = {"pos": pos, "neg": neg}
+            else:
+                words.pop(stem, None)
+            xs.save_portrait_words(words)
+            self._json({"ok": True})
         elif p == "/api/meta":
             meta = xs.load_portrait_meta()
             sex = body.get("sex")

@@ -322,6 +322,11 @@
   <button id="ppBoost" onclick="popPreset('boost')" title="denoise ≥ 0.75, ControlNet allégé (0.35 / fin 0.6), LoRA +0.1 — le style de l'artiste s'exprime beaucoup plus fortement, ressemblance un peu réduite">🔥 Style renforcé</button>
   <button id="ppStd" onclick="popPreset('std')" title="réglages d'origine : denoise 0.70, ControlNet 0.5 / fin 0.75, LoRA 0.9 — bon équilibre style / fidélité au portrait">⚖️ Équilibré</button>
  </div>
+ <div class="qty" style="margin:4px 0"><label title="combos denoise / LoRA / ControlNet / mots, réutilisables dans n'importe quel style">Mes presets ⓘ :</label>
+  <select id="popPresetSel" onchange="applyUserPreset(this.value)" style="max-width:150px"><option value="">—</option></select>
+  <button onclick="saveUserPreset()" title="enregistrer les réglages actuels (denoise, LoRA, ControlNet, mots +/−) sous un nom">💾</button>
+  <button onclick="delUserPreset()" title="supprimer le preset sélectionné">🗑</button>
+ </div>
  <label>Denoise : <span id="dnval">0.70</span></label>
  <input id="popDn" type="range" min="0" max="1" step="0.05" value="0.7" oninput="dnExplain()">
  <div id="dnexpl"></div>
@@ -337,6 +342,11 @@
  <textarea id="popPos" placeholder="ex: smiling, red scarf, freckles"></textarea>
  <label>Ajouter au prompt négatif (fin de prompt) :</label>
  <textarea id="popNeg" placeholder="ex: hat, beard, angry"></textarea>
+ <div id="popWordsSec" style="display:none;border-top:1px dashed #39404f;margin-top:8px;padding-top:6px">
+  <label title="mémorisés pour CE personnage et injectés automatiquement dans toutes ses générations, quel que soit le style (sans doublon si déjà présents)">👤 Mots du personnage — toujours ajoutés (tous styles) ⓘ</label>
+  <input id="popWPos" type="text" style="width:100%;box-sizing:border-box;margin-top:3px" placeholder="positif — ex: eyepatch, scar on cheek" onchange="saveWords()">
+  <input id="popWNeg" type="text" style="width:100%;box-sizing:border-box;margin-top:3px" placeholder="négatif — ex: hat" onchange="saveWords()">
+ </div>
  <div class="actions"><button onclick="hidePop()">Annuler</button>
  <button id="popPrio" onclick="launchRegen(true)" title="passe devant tout ce qui est déjà en file d'attente">⚡ Générer en priorité</button>
  <button class="primary" onclick="launchRegen()">Lancer</button></div>

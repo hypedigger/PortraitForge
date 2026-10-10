@@ -5,6 +5,7 @@ import json
 import mimetypes
 import os
 import random
+import sqlite3
 import time
 import urllib.request
 import urllib.parse
@@ -56,7 +57,7 @@ def set_game(game):
     """
     global PROJECT_DIR, ORIGINALS_DIR, STYLIZED_DIR, EXPORT_DIR, PACK_DIR, \
         PACK_BACKUP_DIR, SELECTIONS_FILE, EXCLUDED_FILE, META_FILE, \
-        TAGS_FILE, FINAL_FILE, ORDER_FILE
+        TAGS_FILE, FINAL_FILE, ORDER_FILE, WORDS_FILE, STATE_DB
     PROJECT_DIR = game["work_dir"]
     ORIGINALS_DIR = os.path.join(PROJECT_DIR, "_originals")
     STYLIZED_DIR = os.path.join(PROJECT_DIR, "stylized")
@@ -74,9 +75,57 @@ def set_game(game):
     TAGS_FILE = os.path.join(state, "portrait_tags.json")
     FINAL_FILE = os.path.join(state, "final_selections.json")
     ORDER_FILE = os.path.join(state, "portrait_order.json")
+    WORDS_FILE = os.path.join(state, "portrait_words.json")
+    STATE_DB = os.path.join(state, "state.db")
 
 
 set_game(current_game())
+
+
+# ------------------------------------------------- etat en SQLite (atomique)
+# Chaque domaine d'etat (selections, meta, final...) est un blob JSON dans
+# _appdata/state.db : ecritures atomiques (transaction + WAL), un seul fichier,
+# plus de JSON corruptible en cas de crash pendant une sauvegarde.
+# Exception : portrait_tags.json reste un fichier (ecrit par tagger.py, un
+# process externe). Migration automatique des anciens JSON au premier acces
+# (l'original est conserve en <nom>.pre-sqlite.bak).
+
+def _state_db():
+    con = sqlite3.connect(STATE_DB, timeout=10)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("CREATE TABLE IF NOT EXISTS state "
+                "(name TEXT PRIMARY KEY, v TEXT NOT NULL)")
+    return con
+
+
+def _state_load(name, json_file, default):
+    try:
+        with _state_db() as con:
+            row = con.execute("SELECT v FROM state WHERE name=?",
+                              (name,)).fetchone()
+        if row is not None:
+            return json.loads(row[0])
+    except sqlite3.Error:
+        pass
+    if json_file and os.path.exists(json_file):
+        # premiere ouverture : migration de l'ancien fichier JSON
+        with open(json_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        _state_save(name, data)
+        try:
+            os.replace(json_file, json_file + ".pre-sqlite.bak")
+        except OSError:
+            pass
+        return data
+    return default
+
+
+def _state_save(name, data):
+    with _state_db() as con:
+        con.execute("INSERT INTO state(name, v) VALUES(?, ?) "
+                    "ON CONFLICT(name) DO UPDATE SET v=excluded.v",
+                    (name, json.dumps(data, ensure_ascii=False)))
+
 
 COMFY_URL = os.environ.get("COMFY_URL", "http://127.0.0.1:8188")
 CONTROLNET_NAME_HINT = "controlnet-union-sdxl-promax"
@@ -556,6 +605,7 @@ def generate_variant(styles_cfg, style_key, portrait, seed=None, denoise=None,
         cfgset["positive"] += ", " + pos_extra.strip()
     if neg_extra and neg_extra.strip():
         cfgset["negative"] += ", " + neg_extra.strip()
+    _apply_portrait_words(cfgset, portrait["stem"])
     pos_extra, neg_extra = portrait_prompt_tags(portrait["stem"])
     char_tags = ""
     if app_s.get("use_auto_tags", True):
@@ -631,6 +681,7 @@ def generate_custom(portrait, opts):
         "cnet_type": app_s.get("cnet_type") or "canny",
         "controlnet": resolve_model("controlnet", CONTROLNET_NAME_HINT),
     }
+    _apply_portrait_words(cfgset, stem)
     pos_extra, neg_extra = portrait_prompt_tags(stem)
     char_tags = ""
     if app_s.get("use_auto_tags", True):
@@ -699,15 +750,31 @@ def save_custom_upload(stem, data, name="upload"):
 
 def load_portrait_meta():
     """Metadonnees par portrait, ex. {stem: {"sex": "male"|"female"|"other", "text": "..."}}."""
-    if os.path.exists(META_FILE):
-        with open(META_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    return _state_load("meta", META_FILE, {})
 
 
 def save_portrait_meta(meta):
-    with open(META_FILE, "w", encoding="utf-8") as f:
-        json.dump(meta, f, indent=1, ensure_ascii=False)
+    _state_save("meta", meta)
+
+
+def load_portrait_words():
+    """Mots memorises par personnage : {stem: {"pos": "...", "neg": "..."}}.
+    Injectes automatiquement dans TOUTES les generations de ce personnage."""
+    return _state_load("words", WORDS_FILE, {})
+
+
+def save_portrait_words(words):
+    _state_save("words", words)
+
+
+def _apply_portrait_words(cfgset, stem):
+    """Ajoute les mots memorises du personnage aux prompts (sans doublon :
+    si la phrase est deja presente, p.ex. relance depuis une image, on saute)."""
+    w = load_portrait_words().get(stem) or {}
+    for field, key in (("positive", "pos"), ("negative", "neg")):
+        extra = (w.get(key) or "").strip(" ,")
+        if extra and extra.lower() not in cfgset[field].lower():
+            cfgset[field] += ", " + extra
 
 
 def portrait_prompt_tags(stem):
@@ -735,53 +802,37 @@ def load_portrait_tags():
 
 def load_excluded():
     """Stems a garder tels quels (pas des personnages / pas a styliser)."""
-    if os.path.exists(EXCLUDED_FILE):
-        with open(EXCLUDED_FILE, "r", encoding="utf-8") as f:
-            return set(json.load(f))
-    return set()
+    return set(_state_load("excluded", EXCLUDED_FILE, []))
 
 
 def save_excluded(stems):
-    with open(EXCLUDED_FILE, "w", encoding="utf-8") as f:
-        json.dump(sorted(stems), f, indent=1)
+    _state_save("excluded", sorted(stems))
 
 
 def load_order():
     """Ordre custom des portraits (liste de stems, tri 'custom')."""
-    if os.path.exists(ORDER_FILE):
-        with open(ORDER_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
+    return _state_load("order", ORDER_FILE, [])
 
 
 def save_order(order):
-    with open(ORDER_FILE, "w", encoding="utf-8") as f:
-        json.dump(list(order), f, indent=1)
+    _state_save("order", list(order))
 
 
 def load_selections():
-    if os.path.exists(SELECTIONS_FILE):
-        with open(SELECTIONS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    return _state_load("selections", SELECTIONS_FILE, {})
 
 
 def save_selections(sel):
-    with open(SELECTIONS_FILE, "w", encoding="utf-8") as f:
-        json.dump(sel, f, indent=1, ensure_ascii=False)
+    _state_save("selections", sel)
 
 
 def load_final():
     """Choix final par personnage : {stem: "style_key/fichier.png"}."""
-    if os.path.exists(FINAL_FILE):
-        with open(FINAL_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    return _state_load("final", FINAL_FILE, {})
 
 
 def save_final(final):
-    with open(FINAL_FILE, "w", encoding="utf-8") as f:
-        json.dump(final, f, indent=1, ensure_ascii=False)
+    _state_save("final", final)
 
 
 def list_style_variants(style_key, stem):

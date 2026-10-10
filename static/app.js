@@ -912,6 +912,15 @@ function showPop(ev,st,stem,kind){
   delete document.getElementById('popSeed').dataset.imgseed;
   document.getElementById('popMemo').checked=true; /* defaut ; decoche pour une relance ponctuelle */
   document.getElementById('popPrio').style.display=(kind==='custom'||kind==='perso')?'':'none';
+  /* mots memorises du personnage (ajoutes a TOUTES ses generations) */
+  const wsec=document.getElementById('popWordsSec');
+  if(stem&&(kind==='custom'||kind==='perso')){
+    const w=(S.words&&S.words[stem])||{};
+    document.getElementById('popWPos').value=w.pos||'';
+    document.getElementById('popWNeg').value=w.neg||'';
+    wsec.style.display='';
+  }else wsec.style.display='none';
+  fillUserPresets();
   popFillStyle();
   const pop=document.getElementById('pop');
   pop.style.display='block';
@@ -923,6 +932,79 @@ function showPop(ev,st,stem,kind){
   pop.style.top=Math.max(8,Math.min(vh-ph-10,r.bottom+8))+'px';
 }
 function hidePop(){document.getElementById('pop').style.display='none';popCtx=null;}
+/* planche contact avant/apres (Selection globale) */
+async function contactSheet(){
+  const items=[];
+  for(const p of visiblePortraits()){
+    const fc=finalChoice(p.stem);
+    if(!fc) continue;
+    items.push(fc.original?{stem:p.stem,original:true}
+                          :{stem:p.stem,style:fc.style,file:fc.file});
+  }
+  if(!items.length){toast(T('Aucune image choisie'));return;}
+  toast('🖼 Génération de la planche contact ('+items.length+' persos)…');
+  const r=await (await fetch('/api/contact_sheet',{method:'POST',
+    body:JSON.stringify({items:items})})).json();
+  if(r.ok) window.open('/contact_sheet.png?'+Date.now());
+}
+
+/* ---------- presets nommes (denoise/LoRA/ControlNet/mots, tous styles) ---------- */
+function fillUserPresets(keep){
+  const sel=document.getElementById('popPresetSel');
+  const ps=(S.settings&&S.settings.user_presets)||{};
+  sel.innerHTML='<option value="">—</option>'+
+    Object.keys(ps).sort().map(n=>'<option value="'+_esc(n)+'">'+_esc(n)+'</option>').join('');
+  sel.value=keep||'';
+}
+function applyUserPreset(name){
+  const p=((S.settings&&S.settings.user_presets)||{})[name];
+  if(!p) return;
+  if(p.denoise!=null){document.getElementById('popDn').value=p.denoise;dnExplain();}
+  if(p.lora_strength!=null) document.getElementById('popLora').value=p.lora_strength;
+  if(p.cnet_strength!=null) document.getElementById('popCnet').value=p.cnet_strength;
+  if(p.cnet_end!=null) document.getElementById('popCend').value=p.cnet_end;
+  document.getElementById('popPos').value=p.pos||'';
+  document.getElementById('popNeg').value=p.neg||'';
+  /* application ponctuelle : ne pas memoriser dans le style par accident */
+  document.getElementById('popMemo').checked=false;
+}
+async function saveUserPreset(){
+  const name=(prompt(T('Nom du preset :'))||'').trim();
+  if(!name) return;
+  const ps=Object.assign({},(S.settings&&S.settings.user_presets)||{});
+  ps[name]={denoise:+document.getElementById('popDn').value,
+    lora_strength:+document.getElementById('popLora').value||null,
+    cnet_strength:+document.getElementById('popCnet').value||null,
+    cnet_end:+document.getElementById('popCend').value||null,
+    pos:document.getElementById('popPos').value.trim(),
+    neg:document.getElementById('popNeg').value.trim()};
+  await fetch('/api/settings',{method:'POST',body:JSON.stringify({user_presets:ps})});
+  (S.settings=S.settings||{}).user_presets=ps;
+  fillUserPresets(name);
+  toast('💾 Preset « '+name+' » enregistré');
+}
+async function delUserPreset(){
+  const sel=document.getElementById('popPresetSel');
+  const name=sel.value;
+  if(!name) return;
+  if(!confirm(T('Supprimer le preset « '+name+' » ?'))) return;
+  const ps=Object.assign({},(S.settings&&S.settings.user_presets)||{});
+  delete ps[name];
+  await fetch('/api/settings',{method:'POST',body:JSON.stringify({user_presets:ps})});
+  (S.settings=S.settings||{}).user_presets=ps;
+  fillUserPresets();
+}
+/* enregistre les mots du personnage (vides = oubli) des la modification */
+async function saveWords(){
+  if(!popCtx||!popCtx.stem) return;
+  const stem=popCtx.stem;
+  const pos=document.getElementById('popWPos').value.trim();
+  const neg=document.getElementById('popWNeg').value.trim();
+  await fetch('/api/words',{method:'POST',body:JSON.stringify({stem:stem,pos:pos,neg:neg})});
+  S.words=S.words||{};
+  if(pos||neg) S.words[stem]={pos:pos,neg:neg}; else delete S.words[stem];
+  toast('💾 Mots du personnage enregistrés — ajoutés à toutes ses futures générations');
+}
 /* case "meme seed" : reprendre / relacher la seed de l'image consultee */
 function popSeedReuseToggle(){
   const ps=document.getElementById('popSeed');
@@ -1077,7 +1159,9 @@ function renderMix(){
   }
   const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   let h='<div class="mixstats">🏆 Artistes les plus sélectionnés ('+totalSel+' persos) : '+
-    (top.length?top.map(([k,n])=>'<b>'+styleLabel(k)+'</b> × '+n).join(' · '):'aucune sélection')+'</div>';
+    (top.length?top.map(([k,n])=>'<b>'+styleLabel(k)+'</b> × '+n).join(' · '):'aucune sélection')+
+    ' <button onclick="contactSheet()" style="font-size:11px;padding:3px 8px;margin-left:10px" '+
+    'title="génère une grande image : chaque personnage avec son original au-dessus de l\'image choisie (dans _selected/)">🖼 Planche contact</button></div>';
   h+='<div id="hscroll" class="hscroll"><div></div></div><div class="mwrap"><table class="matrix mixtbl"><tr><th>Perso</th><th>Original</th><th data-tip="image qui sera exportée pour ce personnage">Choix</th>';
   for(const st of colStyles()) h+='<th class="mstyle" onclick="gotoStyle(\''+st.key+'\')" data-tip="clic gauche : ouvrir la vue Par style">'+st.label+'</th>';
   h+='</tr>';
@@ -1481,14 +1565,61 @@ function verGlobRowHtml(stem){
 function renderProg(){
   const c=document.getElementById('content');
   c.innerHTML='<div class="progwrap">'+
+    '<div id="progHealth" class="pghealth">🩺 …</div>'+
     '<div id="progQueue" class="progq">chargement…</div>'+
     '<h3 class="progh">Dernières images générées <span style="font-size:12px;color:#9ab;font-weight:normal">(clic = fiche du perso, clic droit = zoom)</span> '+
     '<button onclick="openDir(\'stylized\')" style="font-size:12px;padding:5px 10px" title="ouvrir le répertoire des images générées dans l\'explorateur">📂 Ouvrir le dossier des images</button></h3>'+
     '<div id="progWall" class="progwall"></div></div>';
   _progWallKey='';
   progUpdate();
+  progHealth();
 }
-let _progWallKey='';
+/* volet sante : etat ComfyUI, VRAM, temps moyens par style, caches */
+async function progHealth(){
+  const el=document.getElementById('progHealth');
+  if(!el) return;
+  try{
+    const h=await (await fetch('/api/health')).json();
+    const mb=x=>x==null?'?':(x/1048576).toFixed(0)+' Mo';
+    const vr=(h.vram&&h.vram.total)?('VRAM '+mb(h.vram.total-h.vram.free)+' / '+mb(h.vram.total)):'';
+    const avg=Object.entries(h.style_avg||{}).sort((a,b)=>b[1]-a[1]).slice(0,8)
+      .map(([k,v])=>styleLabel(k)+' '+fmtDur(v)).join(' · ');
+    el.innerHTML='<b>🩺 Santé</b> — ComfyUI : '+
+      (h.comfy_alive?'<span style="color:#4c4">en ligne</span>':'<span style="color:#f66">hors ligne</span>')+
+      (h.device?' · '+_esc(h.device):'')+(vr?' · '+vr:'')+
+      ' · miniatures : '+mb(h.thumbs_bytes)+
+      ' <a href="#" onclick="thumbCleanup(event)" title="supprimer les miniatures dont la source a disparu">purger</a>'+
+      ' · corbeille : '+mb(h.trash_bytes)+
+      ' <a href="#" onclick="progHealth();return false" title="actualiser">⟳</a>'+
+      (avg?('<br><span style="color:#9ab;font-size:11px">temps moyen (session) : '+avg+'</span>'):'');
+  }catch(e){el.textContent='🩺 indisponible';}
+}
+async function thumbCleanup(ev){
+  ev.preventDefault();
+  const r=await (await fetch('/api/thumb_cleanup',{method:'POST',body:'{}'})).json();
+  toast('🧹 '+r.removed+' miniatures orphelines supprimées ('+(r.freed/1048576).toFixed(1)+' Mo)');
+  progHealth();
+}
+let _progWallKey='',_qjDragging=false,_qjLastHtml='';
+/* actions sur un job precis de la file */
+function qjDragStart(ev){
+  _qjDragging=true;
+  ev.dataTransfer.setData('text/plain',ev.currentTarget.dataset.jid);
+}
+async function qjDrop(ev){
+  ev.preventDefault();ev.stopPropagation();
+  _qjDragging=false;
+  const src=+ev.dataTransfer.getData('text/plain');
+  const dst=+ev.currentTarget.dataset.jid;
+  if(!src||src===dst) return;
+  await fetch('/api/queue_edit',{method:'POST',body:JSON.stringify({op:'move',id:src,before_id:dst})});
+  progUpdate();
+}
+async function qjEdit(ev,id,op){
+  ev.preventDefault();ev.stopPropagation();
+  await fetch('/api/queue_edit',{method:'POST',body:JSON.stringify({op:op,id:id})});
+  progUpdate();
+}
 async function progUpdate(){
   if(mode!=='prog') return;
   try{
@@ -1510,6 +1641,27 @@ async function progUpdate(){
     if(Object.keys(pby).length){
       h+='<div class="pgpend">En attente : '+
         Object.entries(pby).map(([k,v])=>'<b>'+styleLabel(k)+'</b> × '+v).join(' · ')+'</div>';
+    }
+    /* file detaillee : annuler / prioriser / reordonner par glisser-deposer */
+    if(q.pending>0&&_qjDragging){
+      h+=_qjLastHtml; /* glisser en cours : ne pas reconstruire la liste */
+    }else if(q.pending>0){
+      const jr=await (await fetch('/api/queue_jobs')).json();
+      const jobs=jr.jobs||[];
+      const MAX=150;
+      _qjLastHtml='<div class="pgjobs">'+jobs.slice(0,MAX).map((j,i)=>
+        '<span class="pgjob" draggable="true" data-jid="'+j.id+'" '+
+        'ondragstart="qjDragStart(event)" ondragend="_qjDragging=false" '+
+        'ondragover="event.preventDefault()" ondrop="qjDrop(event)" '+
+        'title="glisser sur un autre job : passer devant lui">'+
+        '<i>'+(i+1)+'</i>'+styleLabel(j.style)+' · '+j.stem+
+        '<a href="#" onclick="qjEdit(event,'+j.id+',\'front\')" title="mettre en tête de file">⏫</a>'+
+        '<a href="#" class="qjx" onclick="qjEdit(event,'+j.id+',\'cancel\')" title="annuler ce job">✕</a></span>').join('')+
+        (jobs.length>MAX?'<span class="pgjob" style="opacity:.6">… +'+(jobs.length-MAX)+' autres</span>':'')+
+        '</div>';
+      h+=_qjLastHtml;
+    }else{
+      _qjLastHtml='';
     }
     if(q.errors&&q.errors.length){
       h+='<div class="pgerr">Dernières erreurs :<br>'+q.errors.slice(-3).join('<br>')+'</div>';
