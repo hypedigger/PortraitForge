@@ -45,6 +45,42 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 
 Your personal files (`styles.json`, `app_settings.json`, `games.json`, generated images) stay local and are never committed.
 
+## Games that are not a flat texture pack (external exporter)
+
+Some emulators have no texture-replacement folder: the textures live inside the game's own archives
+and a mod has to be rebuilt. PortraitForge supports this through an **external exporter** declared on the
+game in `games.json` (edit the file by hand, the 🎮 dialog only knows flat packs):
+
+```json
+{
+ "id": "sentinels13", "name": "13 Sentinels: Aegis Rim (Switch)",
+ "work_dir": "D:\\mods\\13sentinels\\pf_work", "pack_dir": "",
+ "exporter": {"type": "cpk_mod",
+              "toolkit_dir": "D:\\mods\\13sentinels_texmod",
+              "export_dir":  "D:\\mods\\13sentinels_texmod\\export",
+              "import_dir":  "D:\\mods\\13sentinels_texmod\\import",
+              "load_dir":    "%APPDATA%\\yuzu\\load",
+              "mod_name":    "My 13S textures",
+              "texconv":     ""}
+}
+```
+
+With a `cpk_mod` exporter, *Exporter* and *Restaurer les portraits d'origine* no longer copy files into a
+pack folder: each chosen image is resized to its texture's exact size, dropped into the toolkit's `import/`
+folder at the path recorded for that texture, and the toolkit's `import_mod.py` rebuilds the game archive as a
+LayeredFS mod (Eden / Ryujinx / Atmosphère). The rebuild can take a few minutes; its last lines are shown in
+the browser console if it fails. Textures that the game stores several times (language archives) are all
+updated at once.
+
+The work directory is produced by the toolkit (`make_workdir.py`): `_originals/` holds flat copies of the
+textures you want to restyle and `_originals/_sources.json` maps each file back to the archive. The toolkit
+for *13 Sentinels: Aegis Rim* (Switch) is a separate project (NSP → CPK → FTEX/BC7 textures → PNG and back).
+
+Optional per-game key `"portrait_filter": "any"` lists non-square textures too (they are squashed to a
+square for generation and restored to their size on export).
+
+Run a second instance on another port with `python app.py --port 8790`.
+
 ## Notes
 
 - The UI is currently in French; contributions welcome.

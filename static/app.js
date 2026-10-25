@@ -1384,7 +1384,7 @@ function applyThumbSize(){
 }
 async function restoreOriginals(){
   const r=await (await fetch('/api/restore_originals',{method:'POST'})).json();
-  alert(T(r.pack_found?(r.restored+' portraits d\'origine restaurés dans le pack'):'Répertoire du pack introuvable — vérifie le chemin dans les options'));
+  alert(T(r.mod?(r.restored+' portraits d\'origine restaurés dans le mod'+(r.mod.ok?', mod reconstruit':' — ❌ reconstruction du mod échouée')):r.pack_found?(r.restored+' portraits d\'origine restaurés dans le pack'):'Répertoire du pack introuvable — vérifie le chemin dans les options'));
 }
 document.addEventListener('click',e=>{
   if(!e.target.closest('#ctx'))hideCtx();
@@ -1953,7 +1953,11 @@ async function exportSel(force){
     const body=(mode==='detail')?{scope:'style',style:style}:{scope:'final'};
     const r=await (await fetch('/api/export',{method:'POST',body:JSON.stringify(body)})).json();
     let msg='✅ '+r.count+' portraits exportés';
-    if(r.pack_found) msg+=' — '+r.installed+' installés dans le pack ('+r.backed_up+' backups créés)';
+    if(r.mod){
+      msg+=' — '+r.installed+' installés dans le mod, '+(r.mod.ok?'mod reconstruit':'❌ reconstruction du mod échouée (voir la console)');
+      if(!r.mod.ok) console.error('import_mod:', r.mod.error, '\n'+r.mod.output);
+    }
+    else if(r.pack_found) msg+=' — '+r.installed+' installés dans le pack ('+r.backed_up+' backups créés)';
     else msg+=' — pack introuvable, installation ignorée';
     toast(msg);
   }catch(e){

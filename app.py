@@ -24,7 +24,7 @@ from PIL import Image
 
 import xenostyle as xs
 
-PORT = 8777
+PORT = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 8777  # python app.py --port 8790
 THUMB_DIR = os.path.join(xs.APP_DIR, ".thumbs", xs.current_game()["id"])
 THUMB_SIZE = 176
 
@@ -1000,7 +1000,7 @@ class Handler(BaseHTTPRequestHandler):
         elif p == "/api/restore_originals":
             r = xs.restore_originals()
             self._json({"ok": True, "restored": r["restored"],
-                        "pack_found": r["pack_found"]})
+                        "pack_found": r["pack_found"], "mod": r.get("mod")})
         elif p == "/api/select_auto":
             excluded = xs.load_excluded()
             sel = xs.load_selections()
@@ -1384,7 +1384,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True, "count": len(r["exported"]),
                         "installed": r["installed"],
                         "backed_up": r["backed_up"],
-                        "pack_found": r["pack_found"]})
+                        "pack_found": r["pack_found"],
+                        "mod": r.get("mod")})
         else:
             self.send_response(404)
             self.end_headers()

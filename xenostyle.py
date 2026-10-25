@@ -13,6 +13,8 @@ import uuid
 
 from PIL import Image
 
+import exporters
+
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_PROJECT_DIR = os.path.dirname(APP_DIR)
 GAMES_FILE = os.path.join(APP_DIR, "games.json")
@@ -57,7 +59,8 @@ def set_game(game):
     """
     global PROJECT_DIR, ORIGINALS_DIR, STYLIZED_DIR, EXPORT_DIR, PACK_DIR, \
         PACK_BACKUP_DIR, SELECTIONS_FILE, EXCLUDED_FILE, META_FILE, \
-        TAGS_FILE, FINAL_FILE, ORDER_FILE, WORDS_FILE, STATE_DB
+        TAGS_FILE, FINAL_FILE, ORDER_FILE, WORDS_FILE, STATE_DB, \
+        EXPORTER, PORTRAIT_FILTER
     PROJECT_DIR = game["work_dir"]
     ORIGINALS_DIR = os.path.join(PROJECT_DIR, "_originals")
     STYLIZED_DIR = os.path.join(PROJECT_DIR, "stylized")
@@ -77,6 +80,8 @@ def set_game(game):
     ORDER_FILE = os.path.join(state, "portrait_order.json")
     WORDS_FILE = os.path.join(state, "portrait_words.json")
     STATE_DB = os.path.join(state, "state.db")
+    EXPORTER = exporters.get_exporter(game)  # exporteur externe (mod CPK...) ou None
+    PORTRAIT_FILTER = game.get("portrait_filter", "square")  # "any" : textures non carrees aussi
 
 
 set_game(current_game())
@@ -170,7 +175,7 @@ def list_portraits():
                 w, h = im.size
         except Exception:
             continue
-        if w == h and w >= MIN_PORTRAIT_SIZE:
+        if min(w, h) >= MIN_PORTRAIT_SIZE and (w == h or PORTRAIT_FILTER == "any"):
             items.append({"name": name, "stem": os.path.splitext(name)[0],
                           "path": path, "width": w, "height": h,
                           "mtime": os.path.getmtime(path)})
@@ -859,12 +864,15 @@ def effective_choice(style_key, stem, selections=None):
 def _export_items(items, resize_to_original=None, install_to_pack=True,
                   pack_dir=None):
     """items = [(portrait, style_key, fname)] -> _selected/ + pack (avec backup)."""
+    ext = EXPORTER if install_to_pack else None
+    if ext is not None:
+        resize_to_original = True  # le toolkit exige la taille exacte de la texture
     if resize_to_original is None:
         resize_to_original = bool(load_app_settings().get("resize_export", True))
     pack = pack_dir or PACK_DIR
     os.makedirs(EXPORT_DIR, exist_ok=True)
     exported, installed, backed_up = [], 0, 0
-    pack_ok = install_to_pack and os.path.isdir(pack)
+    pack_ok = install_to_pack and ext is None and os.path.isdir(pack)
     for p, style_key, fname in items:
         if style_key is None:
             src = p["path"]  # texture originale conservee volontairement
@@ -877,7 +885,9 @@ def _export_items(items, resize_to_original=None, install_to_pack=True,
             if resize_to_original and im.size != (p["width"], p["height"]):
                 im = im.resize((p["width"], p["height"]), Image.LANCZOS)
             im.save(os.path.join(EXPORT_DIR, p["name"]))
-            if pack_ok:
+            if ext is not None:
+                installed += ext.install(p["name"], im)
+            elif pack_ok:
                 pack_file = os.path.join(pack, p["name"])
                 if os.path.exists(pack_file) and \
                    load_app_settings().get("pack_backup", True):
@@ -889,8 +899,10 @@ def _export_items(items, resize_to_original=None, install_to_pack=True,
                 im.save(pack_file)
                 installed += 1
         exported.append(p["name"])
+    mod = ext.rebuild() if (ext is not None and exported) else None
     return {"exported": exported, "installed": installed,
-            "backed_up": backed_up, "pack_found": pack_ok}
+            "backed_up": backed_up, "pack_found": pack_ok or ext is not None,
+            "mod": mod}
 
 
 def export_style(style_key, pack_dir=None):
@@ -910,6 +922,9 @@ def export_style(style_key, pack_dir=None):
 def restore_originals(pack_dir=None):
     """Recopie les portraits de _originals dans le pack (retour a l'origine)."""
     import shutil
+    if EXPORTER is not None:
+        n = sum(1 for p in list_portraits() if EXPORTER.remove(p["name"]))
+        return {"restored": n, "pack_found": True, "mod": EXPORTER.rebuild()}
     pack = pack_dir or PACK_DIR
     if not os.path.isdir(pack):
         return {"restored": 0, "pack_found": False}
