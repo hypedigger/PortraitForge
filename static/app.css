@@ -135,6 +135,9 @@ table.matrix{border-collapse:collapse}
 .pgerr{color:#f88;font-size:12px}
 .progh{color:#8fd;font-size:15px;margin:0 0 10px}
 .progwall{display:flex;flex-wrap:wrap;gap:10px}
+/* boutons de cadrage (buste / plein pied) : style des boutons sexe, accent propre */
+.sxb.sxf.on{border-color:#7ac0ff;color:#bfe0ff;box-shadow:0 0 6px #7ac0ff55}
+.sxb.sxf.forced{outline:2px solid #d4a017}
 /* volet sante (onglet Generation) */
 .pghealth{background:#171b22;border:1px solid #2a3140;border-radius:8px;padding:8px 12px;margin-bottom:10px;
  font-size:12px;color:#bcd;line-height:1.7}

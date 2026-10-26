@@ -110,6 +110,8 @@
   <textarea id="optINeg" class="deftxt" onchange="defSave()"></textarea>
   <label>Suffixe commun (fin du prompt positif) :</label>
   <textarea id="optSuffix" class="deftxt" onchange="defSave()"></textarea>
+  <label title="remplace le suffixe commun pour LE JEU COURANT uniquement (vide = suffixe commun). Les termes de cadrage (portrait / full body) sont gérés automatiquement par image, inutile de les mettre ici">Suffixe propre au jeu courant (vide = commun) ⓘ :</label>
+  <textarea id="optGameSuffix" class="deftxt" onchange="gameSuffixSave()"></textarea>
   <div style="margin-top:6px;font-size:11px;color:var(--dim);font-style:italic">
    Chaîne finale : préfixe + [sexe + tags auto] + prompt du style + suffixe (+ tes ajouts Custom).
   </div>

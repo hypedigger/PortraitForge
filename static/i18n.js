@@ -275,6 +275,23 @@ const PF_I18N_EN = {
   "Exporter quand même": "Export anyway",
   "(clic sur un personnage : ouvrir toutes ses versions)": "(click a character: open all its versions)",
 
+  /* ---- cadrage par image & suffixe par jeu ---- */
+  "👤 Buste": "👤 Bust",
+  "🧍 Pied": "🧍 Full body",
+  "cadrage buste (auto-détecté)": "bust framing (auto-detected)",
+  "cadrage plein pied (auto-détecté)": "full-body framing (auto-detected)",
+  "cadrage buste": "bust framing",
+  "cadrage plein pied": "full-body framing",
+  "cadrage forcé : buste — re-clic : retour auto": "forced framing: bust — click again: back to auto",
+  "cadrage forcé : plein pied — re-clic : retour auto": "forced framing: full body — click again: back to auto",
+  "🖼 Cadrage forcé : buste": "🖼 Framing forced: bust",
+  "🖼 Cadrage forcé : plein pied": "🖼 Framing forced: full body",
+  "🖼 Cadrage : retour à l'auto-détection": "🖼 Framing: back to auto-detection",
+  "Suffixe propre au jeu courant (vide = commun) ⓘ :": "Current game's own suffix (empty = common) ⓘ:",
+  "remplace le suffixe commun pour LE JEU COURANT uniquement (vide = suffixe commun). Les termes de cadrage (portrait / full body) sont gérés automatiquement par image, inutile de les mettre ici": "replaces the common suffix for THE CURRENT GAME only (empty = common suffix). Framing terms (portrait / full body) are handled automatically per image, no need to put them here",
+  "💾 Suffixe du jeu enregistré": "💾 Game suffix saved",
+  "💾 Suffixe du jeu retiré (suffixe commun)": "💾 Game suffix removed (common suffix)",
+
   /* ---- mots par personnage, presets, file, sante, planche ---- */
   "👤 Mots du personnage — toujours ajoutés (tous styles) ⓘ": "👤 Character words — always added (all styles) ⓘ",
   "mémorisés pour CE personnage et injectés automatiquement dans toutes ses générations, quel que soit le style (sans doublon si déjà présents)": "remembered for THIS character and injected into all of its generations, whatever the style (no duplicate if already present)",

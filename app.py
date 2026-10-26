@@ -596,6 +596,7 @@ class Handler(BaseHTTPRequestHandler):
                         "excluded": sorted(xs.load_excluded()),
                         "order": xs.load_order(),
                         "meta": xs.load_portrait_meta(),
+                        "framing": xs.framing_map(),
                         "words": xs.load_portrait_words(),
                         "final": xs.load_final(),
                         "settings": load_settings(),
@@ -997,6 +998,19 @@ class Handler(BaseHTTPRequestHandler):
                     xs.set_game(game)
                     break
             self._json({"ok": True})
+        elif p == "/api/game_suffix":
+            # suffixe de prompt propre au jeu courant (vide = suffixe commun)
+            g = xs.load_games()
+            for game in g["games"]:
+                if game["id"] == g.get("current"):
+                    sfx = (body.get("suffix") or "").strip()
+                    if sfx:
+                        game["suffix"] = sfx
+                    else:
+                        game.pop("suffix", None)
+                    xs.save_games(g)
+                    break
+            self._json({"ok": True})
         elif p == "/api/restore_originals":
             r = xs.restore_originals()
             self._json({"ok": True, "restored": r["restored"],
@@ -1240,10 +1254,23 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
         elif p == "/api/meta":
             meta = xs.load_portrait_meta()
-            sex = body.get("sex")
-            if sex in ("male", "female", "other"):
-                meta[body["stem"]] = {"sex": sex,
-                                      "text": (body.get("text") or "").strip()}
+            cur = dict(meta.get(body["stem"]) or {})
+            if "framing" in body:
+                # cadrage force (portrait / full) ; autre valeur = retour auto
+                if body.get("framing") in ("portrait", "full"):
+                    cur["framing"] = body["framing"]
+                else:
+                    cur.pop("framing", None)
+            if "sex" in body:
+                sex = body.get("sex")
+                if sex in ("male", "female", "other"):
+                    cur["sex"] = sex
+                    cur["text"] = (body.get("text") or "").strip()
+                else:
+                    cur.pop("sex", None)
+                    cur.pop("text", None)
+            if cur:
+                meta[body["stem"]] = cur
             else:
                 meta.pop(body["stem"], None)
             xs.save_portrait_meta(meta)

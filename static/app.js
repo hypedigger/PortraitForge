@@ -417,6 +417,8 @@ function renderDetail(){
     const left=document.createElement('div');left.className='stemname';
     const m=S.meta[p.stem]||{};
     const sx=m.sex||'male'; /* defaut : male */
+    const frExp=m.framing||'';                       /* '' = auto */
+    const frEff=(S.framing&&S.framing[p.stem])||'portrait';
     left.innerHTML=
       '<div class="sxrow">'+
       '<button class="sxb m'+(sx==='male'?' on':'')+'" title="mâle">♂ Mâle</button>'+
@@ -425,14 +427,25 @@ function renderDetail(){
       '<div class="sxrow">'+
       '<button class="sxb o'+(sx==='other'?' on':'')+'" title="autre (texte libre)">✎ Autre</button>'+
       '</div>'+
+      '<div class="sxrow">'+
+      '<button class="sxb sxf'+(frEff==='portrait'?' on':'')+(frExp==='portrait'?' forced':'')+'" '+
+        'title="'+(frExp==='portrait'?'cadrage forcé : buste — re-clic : retour auto':'cadrage buste'+(frExp?'':' (auto-détecté)'))+'">👤 Buste</button>'+
+      '<button class="sxb sxf'+(frEff==='full'?' on':'')+(frExp==='full'?' forced':'')+'" '+
+        'title="'+(frExp==='full'?'cadrage forcé : plein pied — re-clic : retour auto':'cadrage plein pied'+(frExp?'':' (auto-détecté)'))+'">🧍 Pied</button>'+
+      '</div>'+
       '<input class="sxtxt'+(sx==='other'?' show':'')+'" placeholder="ex: monster, furry" value="'+((m.text||'').replace(/"/g,'&quot;'))+'">';
-    const bs=left.querySelectorAll('.sxb');
+    const bs=left.querySelectorAll('.sxb:not(.sxf)');
     const sexes=['male','female','other'];
     const clss=['m','f','o'];
     bs.forEach((b,i)=>{b.onclick=async(ev)=>{
       const r=ev.currentTarget.getBoundingClientRect();
       await setSex(p.stem,sexes[i],left.querySelector('.sxtxt').value);
       if(sexes[i]!=='other') advanceScroll(p.stem,clss[i],r);
+    };});
+    const frvals=['portrait','full'];
+    left.querySelectorAll('.sxf').forEach((b,i)=>{b.onclick=async()=>{
+      /* clic sur le cadrage deja force = retour a l'auto-detection */
+      await setFraming(p.stem,(m.framing===frvals[i])?null:frvals[i]);
     };});
     left.querySelector('.sxtxt').onchange=(e)=>setSex(p.stem,'other',e.target.value);
     row.appendChild(left);
@@ -804,6 +817,12 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='Escape'){e.preventDefault();cropCancel();}
 },true);
 
+/* cadrage force (portrait/full) ou retour auto (null) pour un personnage */
+async function setFraming(stem,v){
+  await fetch('/api/meta',{method:'POST',body:JSON.stringify({stem:stem,framing:v})});
+  await refresh(); render();
+  toast(v?('🖼 Cadrage forcé : '+(v==='full'?'plein pied':'buste')):T('🖼 Cadrage : retour à l\'auto-détection'));
+}
 async function setSex(stem,sex,text){
   await fetch('/api/meta',{method:'POST',body:JSON.stringify({stem:stem,sex:sex,text:text||''})});
   if(sex) S.meta[stem]={sex:sex,text:text||''}; else delete S.meta[stem];
@@ -1253,6 +1272,8 @@ function optOpen(){
   document.getElementById('optIPrefix').value=(S.defaults&&S.defaults.il_prefix)||'';
   document.getElementById('optINeg').value=(S.defaults&&S.defaults.il_negative)||'';
   document.getElementById('optSuffix').value=(S.defaults&&S.defaults.suffix)||'';
+  document.getElementById('optGameSuffix').value=(S.game&&S.game.suffix)||'';
+  document.getElementById('optGameSuffix').placeholder=(S.defaults&&S.defaults.suffix)||'';
   fillCheckpoints();
   document.getElementById('optThumb').value=s.thumb_size||'moyennes';
   const useStyleDn=(s.default_denoise===null||s.default_denoise===undefined);
@@ -1275,6 +1296,13 @@ function optOpen(){
   document.getElementById('optpop').style.display='block';
 }
 function optClose(){document.getElementById('optpop').style.display='none';}
+/* suffixe de prompt propre au jeu courant (vide = suffixe commun) */
+async function gameSuffixSave(){
+  const v=document.getElementById('optGameSuffix').value.trim();
+  await fetch('/api/game_suffix',{method:'POST',body:JSON.stringify({suffix:v})});
+  if(S.game) S.game.suffix=v||undefined;
+  toast(v?T('💾 Suffixe du jeu enregistré'):T('💾 Suffixe du jeu retiré (suffixe commun)'));
+}
 /* changement de langue : enregistre puis recharge (toute l'UI est retraduite) */
 async function optLangChange(){
   const v=document.getElementById('optLang').value;

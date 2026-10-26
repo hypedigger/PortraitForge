@@ -289,7 +289,8 @@ def build_workflow(cfgset, image_name, seed, control_name=None):
         "5": {"class_type": "LoadImage", "inputs": {"image": image_name}},
         "6": {"class_type": "ImageScale",
               "inputs": {"image": ["5", 0], "upscale_method": "lanczos",
-                         "width": cfgset["size"], "height": cfgset["size"],
+                         "width": cfgset.get("width", cfgset["size"]),
+                         "height": cfgset.get("height", cfgset["size"]),
                          "crop": "disabled"}},
         "7": {"class_type": "Canny",
               "inputs": {"image": ["6", 0], "low_threshold": 0.25,
@@ -380,7 +381,8 @@ def build_cfgset(styles_cfg, style_key, denoise=None):
         "checkpoint": resolve_model("checkpoints", checkpoint),
         "lora": resolve_model("loras", s["lora"]) if s.get("lora") else None,
         "lora_strength": s.get("lora_strength", 0.9),
-        "positive": base["prefix"] + s["prompt"] + d["suffix"],
+        "positive": base["prefix"] + s["prompt"]
+        + (current_game().get("suffix") or d["suffix"]),
         "negative": base["negative"] + s.get("negative_extra", ""),
         "cfg": s.get("cfg", app_s.get("cfg_" + s["base"]) or base["cfg"]),
         "steps": int(s.get("steps", app_s.get("gen_steps") or d["steps"])),
@@ -535,15 +537,29 @@ def shrink_alpha(alpha, erode_px=2, feather=1.2):
     return ImageChops.darker(a, alpha)
 
 
+def _fit_dims(w, h, long_side):
+    """Dimensions de generation : cote long = long_side, ratio preserve,
+    arrondies au multiple de 8 (exigence des latents SDXL)."""
+    if w >= h:
+        nw = long_side
+        nh = max(64, int(round(h * long_side / w / 8)) * 8)
+    else:
+        nh = long_side
+        nw = max(64, int(round(w * long_side / h / 8)) * 8)
+    return nw, nh
+
+
 def prepare_input(portrait_path, size):
-    """RGBA -> RGB sur fond blanc, redimensionne en size x size."""
+    """RGBA -> RGB sur fond blanc, cote long = size, RATIO PRESERVE
+    (les sprites en pied ne sont plus ecrases en carre)."""
     with Image.open(portrait_path) as im:
         im = im.convert("RGBA")
         bg = Image.new("RGBA", im.size, (255, 255, 255, 255))
         rgb = Image.alpha_composite(bg, im).convert("RGB")
         alpha = im.getchannel("A")
-    rgb = rgb.resize((size, size), Image.LANCZOS)
-    alpha = alpha.resize((size, size), Image.LANCZOS)
+        w, h = _fit_dims(im.width, im.height, size)
+    rgb = rgb.resize((w, h), Image.LANCZOS)
+    alpha = alpha.resize((w, h), Image.LANCZOS)
     return rgb, alpha
 
 
@@ -570,7 +586,8 @@ def save_png_with_params(img, path, cfgset, seed):
               "ControlNet: union-%s (strength %g, end %g)") % (
         cfgset["positive"], lora_part, cfgset["negative"],
         cfgset["steps"], sampler, cfgset["cfg"], seed,
-        cfgset["size"], cfgset["size"], model, cfgset["denoise"],
+        cfgset.get("width", cfgset["size"]),
+        cfgset.get("height", cfgset["size"]), model, cfgset["denoise"],
         cfgset.get("cnet_type", "canny"),
         cfgset.get("cnet_strength", 0), cfgset.get("cnet_end", 0))
     meta = PngInfo()
@@ -610,6 +627,7 @@ def generate_variant(styles_cfg, style_key, portrait, seed=None, denoise=None,
         cfgset["positive"] += ", " + pos_extra.strip()
     if neg_extra and neg_extra.strip():
         cfgset["negative"] += ", " + neg_extra.strip()
+    _apply_framing(cfgset, portrait["stem"])
     _apply_portrait_words(cfgset, portrait["stem"])
     pos_extra, neg_extra = portrait_prompt_tags(portrait["stem"])
     char_tags = ""
@@ -622,6 +640,7 @@ def generate_variant(styles_cfg, style_key, portrait, seed=None, denoise=None,
     if neg_extra:
         cfgset["negative"] = cfgset["negative"] + ", " + neg_extra
     rgb, alpha = prepare_input(portrait["path"], cfgset["size"])
+    cfgset["width"], cfgset["height"] = rgb.size
     up_name = upload_image(rgb, "xenostyle_%s.png" % portrait["stem"])
     control_name = None
     if cfgset.get("cnet_type") == "lineart":
@@ -711,7 +730,9 @@ def generate_custom(portrait, opts):
         pick = sel if sel in files else (files[-1] if files else None)
         if pick:
             src_path = os.path.join(STYLIZED_DIR, CUSTOM_KEY, stem, pick)
+    _apply_framing(cfgset, stem)
     rgb, alpha = prepare_input(src_path, cfgset["size"])
+    cfgset["width"], cfgset["height"] = rgb.size
     up_name = upload_image(rgb, "xenostyle_%s.png" % stem)
     control_name = None
     if cfgset.get("cnet_type") == "lineart":
@@ -770,6 +791,80 @@ def load_portrait_words():
 
 def save_portrait_words(words):
     _state_save("words", words)
+
+
+# ----------------------------------------------------- cadrage par portrait
+# "portrait" (buste) ou "full" (plein pied) : detecte automatiquement via le
+# ratio de la zone opaque (+ le tag 'full body' du tagger), surchargable par
+# personnage dans l'UI (meta.framing). Les termes de cadrage sont retires du
+# prompt puis reinjectes selon le cadrage effectif de CHAQUE image.
+
+FRAMING_POS = {"portrait": "portrait, upper body",
+               "full": "full body, standing, head to toe"}
+FRAMING_NEG = {"portrait": "full body",
+               "full": "portrait, close-up, cropped legs"}
+_FRAMING_TOKENS = {"portrait", "upper body", "full body", "standing",
+                   "head to toe"}
+
+
+def _detect_framing(path, stem):
+    """'full' si la zone opaque est nettement plus haute que large,
+    ou si le tagger a vu 'full body' ; sinon 'portrait'."""
+    if "full body" in load_portrait_tags().get(stem, ""):
+        return "full"
+    try:
+        with Image.open(path) as im:
+            im = im.convert("RGBA")
+            box = im.getchannel("A").getbbox() or (0, 0, im.width, im.height)
+        bw, bh = box[2] - box[0], box[3] - box[1]
+        if bw > 0 and bh >= 1.6 * bw:
+            return "full"
+    except Exception:
+        pass
+    return "portrait"
+
+
+def framing_map():
+    """{stem: cadrage effectif} pour tous les portraits (detection en cache)."""
+    meta = load_portrait_meta()
+    cache = _state_load("framing_auto", None, {})
+    dirty = False
+    out = {}
+    for p in list_portraits():
+        s = p["stem"]
+        f = (meta.get(s) or {}).get("framing")
+        if f in ("portrait", "full"):
+            out[s] = f
+            continue
+        if s not in cache:
+            cache[s] = _detect_framing(p["path"], s)
+            dirty = True
+        out[s] = cache[s]
+    if dirty:
+        _state_save("framing_auto", cache)
+    return out
+
+
+def portrait_framing(stem):
+    """Cadrage effectif d'un portrait : choix manuel sinon auto-detection."""
+    f = (load_portrait_meta().get(stem) or {}).get("framing")
+    if f in ("portrait", "full"):
+        return f
+    cache = _state_load("framing_auto", None, {})
+    if stem not in cache:
+        cache[stem] = _detect_framing(
+            os.path.join(ORIGINALS_DIR, stem + ".png"), stem)
+        _state_save("framing_auto", cache)
+    return cache[stem]
+
+
+def _apply_framing(cfgset, stem):
+    """Remplace les termes de cadrage du prompt par ceux du cadrage effectif."""
+    fr = portrait_framing(stem)
+    toks = [t.strip() for t in cfgset["positive"].split(",")]
+    toks = [t for t in toks if t and t.lower() not in _FRAMING_TOKENS]
+    cfgset["positive"] = ", ".join(toks) + ", " + FRAMING_POS[fr]
+    cfgset["negative"] += ", " + FRAMING_NEG[fr]
 
 
 def _apply_portrait_words(cfgset, stem):
