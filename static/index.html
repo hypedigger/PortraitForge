@@ -357,6 +357,15 @@
  <textarea id="popPos" placeholder="ex: smiling, red scarf, freckles"></textarea>
  <label>Ajouter au prompt négatif (fin de prompt) :</label>
  <textarea id="popNeg" placeholder="ex: hat, beard, angry"></textarea>
+ <div id="popFullSec" style="display:none;border-top:1px dashed #39404f;margin-top:8px;padding-top:6px">
+  <label style="cursor:pointer" onclick="popFullToggle()" title="prompts positif et négatif EXACTS utilisés pour générer cette image (lus dans ses métadonnées PNG). Lecture seule : les tags auto, le cadrage et les mots du personnage sont réinjectés automatiquement à chaque génération — les recopier dans les zones ci-dessus les ferait apparaître en double"><span id="popFullArrow">▸</span> 📋 Prompt complet de cette image ⓘ</label>
+  <div id="popFullBody" style="display:none">
+   <div class="pfrow"><span style="color:#8fd">positif</span><button onclick="popFullCopy('popFullPos')" title="copier le prompt positif">📋 copier</button></div>
+   <div id="popFullPos" class="popfull"></div>
+   <div class="pfrow"><span style="color:#f99">négatif</span><button onclick="popFullCopy('popFullNeg')" title="copier le prompt négatif">📋 copier</button></div>
+   <div id="popFullNeg" class="popfull"></div>
+  </div>
+ </div>
  <div id="popWordsSec" style="display:none;border-top:1px dashed #39404f;margin-top:8px;padding-top:6px">
   <label title="mémorisés pour CE personnage et injectés automatiquement dans toutes ses générations, quel que soit le style (sans doublon si déjà présents)">👤 Mots du personnage — toujours ajoutés (tous styles) ⓘ</label>
   <input id="popWPos" type="text" style="width:100%;box-sizing:border-box;margin-top:3px" placeholder="positif — ex: eyepatch, scar on cheek" onchange="saveWords()">

@@ -930,6 +930,10 @@ function showPop(ev,st,stem,kind){
   document.getElementById('popSeedReuse').checked=false;
   delete document.getElementById('popSeed').dataset.imgseed;
   document.getElementById('popMemo').checked=true; /* defaut ; decoche pour une relance ponctuelle */
+  /* prompt complet : visible uniquement en regeneration d'une image precise */
+  document.getElementById('popFullSec').style.display='none';
+  document.getElementById('popFullBody').style.display='none';
+  document.getElementById('popFullArrow').textContent='▸';
   document.getElementById('popPrio').style.display=(kind==='custom'||kind==='perso')?'':'none';
   /* mots memorises du personnage (ajoutes a TOUTES ses generations) */
   const wsec=document.getElementById('popWordsSec');
@@ -951,6 +955,18 @@ function showPop(ev,st,stem,kind){
   pop.style.top=Math.max(8,Math.min(vh-ph-10,r.bottom+8))+'px';
 }
 function hidePop(){document.getElementById('pop').style.display='none';popCtx=null;}
+/* section repliable "prompt complet" du popup Regenerer (lecture seule) */
+function popFullToggle(){
+  const b=document.getElementById('popFullBody');
+  const open=b.style.display==='none';
+  b.style.display=open?'':'none';
+  document.getElementById('popFullArrow').textContent=open?'▾':'▸';
+}
+function popFullCopy(id){
+  navigator.clipboard.writeText(document.getElementById(id).textContent)
+    .then(()=>toast(T('📋 Prompt copié dans le presse-papiers')))
+    .catch(()=>{});
+}
 /* planche contact avant/apres (Selection globale) */
 async function contactSheet(){
   const items=[];
@@ -2500,6 +2516,13 @@ function popApplyGenParams(gp){
   /* mots ajoutes aux prompts lors de la generation de cette image */
   document.getElementById('popPos').value=gp.pos_extra||'';
   document.getElementById('popNeg').value=gp.neg_extra||'';
+  /* prompt complet de l'image (lecture seule, replie par defaut) : tous les
+     mots effectivement utilises — tags auto, cadrage, mots du perso, style */
+  if(gp.positive){
+    document.getElementById('popFullPos').textContent=gp.positive;
+    document.getElementById('popFullNeg').textContent=gp.negative||'';
+    document.getElementById('popFullSec').style.display='';
+  }
   /* quantite : celle configuree (les seeds s'incrementent par exemplaire) */
   if(gp.model){
     /* recaler le checkpoint sur celui de l'image (nom sans extension) */
