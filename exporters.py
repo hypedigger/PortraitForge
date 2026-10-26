@@ -6,20 +6,25 @@ les images exportees sont deposees dans le dossier d'import d'un toolkit externe
 les archives du jeu en mod LayeredFS (cas de 13 Sentinels: Aegis Rim sur Switch).
 
   "exporter": {"type": "cpk_mod",
-               "toolkit_dir": "<dossier contenant import_mod.py>",
+               "toolkit_dir": "<dossier contenant import_mod.py et restyle_chain.py>",
                "export_dir":  "<dossier de l'export du toolkit, avec manifest.json>",
                "import_dir":  "<dossier d'import du toolkit>",
                "load_dir":    "%APPDATA%\\yuzu\\load",
                "mod_name":    "Mon mod",
                "texconv":     ""}            # optionnel : chemin de texconv.exe (meilleur encodage BC7)
 
-Le dossier _originals du jeu doit contenir _sources.json (ecrit par make_workdir.py du toolkit) :
-nom du PNG d'origine -> {"png": chemin relatif dans l'export, "sha1": ..., ...}.
-Les textures du manifeste qui partagent le meme sha1 (doublons entre archives de langue)
-recoivent toutes la meme image.
+Le dossier _originals du jeu doit contenir _sources.json (ecrit par make_workdir.py / make_pose_workdir.py
+du toolkit) : nom du PNG d'origine -> description de la source. Deux types :
+- texture (defaut) : {"png": chemin relatif dans l'export, "sha1": ...} ; l'image choisie remplace la texture
+  (et ses doublons de meme sha1 dans les archives de langue).
+- pose : {"type": "pose", "pose_dir", "stem", "pad", "size", "mbs", "atlas_rel", "selection", "atlas_pngs"} ;
+  l'image choisie est recadree (les marges qui la mettaient au carre sont retirees) et rangee comme version
+  modifiee de la pose ; a la reconstruction, restyle_chain.py redecoupe toutes les poses modifiees du
+  personnage dans ses atlas, dans l'ordre de la selection, puis import_mod.py reconstruit le mod.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -48,6 +53,7 @@ class CpkModExporter:
                 self._sources = {}
         return self._sources
 
+    # ------------------------------------------------------------- textures
     def _duplicates(self):
         """sha1 -> tous les chemins PNG du manifeste partageant ces donnees."""
         if self._dups is None:
@@ -64,9 +70,9 @@ class CpkModExporter:
         return self._dups
 
     def targets(self, name):
-        """Chemins relatifs (dans import_dir) a ecrire pour un PNG de _originals."""
+        """Chemins relatifs (dans import_dir) a ecrire pour un PNG de _originals de type texture."""
         src = self.sources().get(name)
-        if not src:
+        if not src or src.get("type") == "pose":
             return []
         rels = list(self._duplicates().get(src.get("sha1"), []))
         if src["png"] not in rels:
@@ -76,8 +82,36 @@ class CpkModExporter:
     def _dst(self, rel):
         return os.path.join(self.cfg["import_dir"], rel.replace("\\", os.sep).replace("/", os.sep))
 
+    # ---------------------------------------------------------------- poses
+    def _pose_mod_path(self, src):
+        return os.path.join(src["pose_dir"], src["stem"] + "_mod.png")
+
+    def _pose_groups(self):
+        """Regroupe les sources de type pose par personnage : cle -> (source de reference, [sources])."""
+        groups = {}
+        for name, src in self.sources().items():
+            if src.get("type") != "pose":
+                continue
+            key = (src["mbs"], src["atlas_rel"], src["selection"], src["pose_dir"])
+            groups.setdefault(key, []).append(src)
+        return groups
+
+    # ------------------------------------------------------------ interface
     def install(self, name, image):
-        """Depose l'image (deja a la taille d'origine) pour chaque texture concernee. Retourne le nombre ecrit."""
+        """Depose l'image (deja a la taille de l'original). Retourne le nombre de fichiers ecrits."""
+        src = self.sources().get(name)
+        if not src:
+            return 0
+        if src.get("type") == "pose":
+            px, py = src["pad"]
+            w, h = src["size"]
+            if image.size != (src["square"], src["square"]):
+                image = image.resize((src["square"], src["square"]))
+            crop = image.crop((px, py, px + w, py + h))
+            dst = self._pose_mod_path(src)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            crop.save(dst)
+            return 1
         n = 0
         for rel in self.targets(name):
             dst = self._dst(rel)
@@ -87,6 +121,15 @@ class CpkModExporter:
         return n
 
     def remove(self, name):
+        src = self.sources().get(name)
+        if not src:
+            return 0
+        if src.get("type") == "pose":
+            dst = self._pose_mod_path(src)
+            if os.path.exists(dst):
+                os.remove(dst)
+                return 1
+            return 0
         n = 0
         for rel in self.targets(name):
             dst = self._dst(rel)
@@ -95,23 +138,40 @@ class CpkModExporter:
                 n += 1
         return n
 
+    def _run(self, args, timeout):
+        try:
+            r = subprocess.run([sys.executable] + args, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", cwd=self.cfg["toolkit_dir"], timeout=timeout)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            return False, str(e), ""
+        out = (r.stdout or "") + (r.stderr or "")
+        return r.returncode == 0, "" if r.returncode == 0 else "code %d" % r.returncode, "\n".join(out.strip().splitlines()[-12:])
+
     def rebuild(self):
-        """Reconstruit le mod avec import_mod.py du toolkit (peut prendre plusieurs minutes)."""
-        script = os.path.join(self.cfg["toolkit_dir"], "import_mod.py")
-        cmd = [sys.executable, script, self.cfg["export_dir"], self.cfg["import_dir"],
+        """Redecoupe les poses modifiees dans les atlas, puis reconstruit le mod avec import_mod.py."""
+        tk = self.cfg["toolkit_dir"]
+        log = []
+        for (mbs, atlas_rel, selection, pose_dir), srcs in self._pose_groups().items():
+            atlas_in = os.path.join(self.cfg["export_dir"], atlas_rel.replace("/", os.sep))
+            atlas_out = self._dst(atlas_rel)
+            has_mod = any(os.path.exists(self._pose_mod_path(s)) for s in srcs)
+            if has_mod:
+                ok, err, out = self._run([os.path.join(tk, "restyle_chain.py"), "split", mbs, atlas_in, selection, pose_dir, atlas_out], 3600)
+                log.append("%s : %s" % (os.path.basename(atlas_rel), out.splitlines()[-1] if out else err))
+                if not ok:
+                    return {"ok": False, "error": "restyle_chain.py %s" % err, "output": "\n".join(log + [out])}
+            elif os.path.isdir(atlas_out):
+                for s in srcs[0]["atlas_pngs"]:
+                    p = self._dst(s)
+                    if os.path.exists(p):
+                        os.remove(p)
+                log.append("%s : plus de pose modifiee, atlas retires du mod" % os.path.basename(atlas_rel))
+        cmd = [os.path.join(tk, "import_mod.py"), self.cfg["export_dir"], self.cfg["import_dir"],
                self.cfg["load_dir"], self.cfg["mod_name"]]
         if self.cfg.get("texconv"):
             cmd += ["--texconv", self.cfg["texconv"]]
-        try:
-            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                               cwd=self.cfg["toolkit_dir"], timeout=3600)
-        except (OSError, subprocess.TimeoutExpired) as e:
-            return {"ok": False, "error": str(e), "output": ""}
-        out = (r.stdout or "") + (r.stderr or "")
-        tail = "\n".join(out.strip().splitlines()[-12:])
-        return {"ok": r.returncode == 0,
-                "error": "" if r.returncode == 0 else "import_mod.py a renvoye le code %d" % r.returncode,
-                "output": tail}
+        ok, err, out = self._run(cmd, 3600)
+        return {"ok": ok, "error": "" if ok else "import_mod.py a renvoye %s" % err, "output": "\n".join(log + [out])}
 
 
 def get_exporter(game):

@@ -76,6 +76,13 @@ The work directory is produced by the toolkit (`make_workdir.py`): `_originals/`
 textures you want to restyle and `_originals/_sources.json` maps each file back to the archive. The toolkit
 for *13 Sentinels: Aegis Rim* (Switch) is a separate project (NSP → CPK → FTEX/BC7 textures → PNG and back).
 
+**Character poses.** The same exporter also accepts *pose* sources (entries with `"type": "pose"` in
+`_originals/_sources.json`, produced by the toolkit's `make_pose_workdir.py`): the original is a rendered pose of an
+animated character, padded to a square. On export the chosen image is cropped back to the pose and stored as
+`<pose>_mod.png`; the rebuild then splits every modified pose of that character back into its texture atlases
+(cumulatively, through the toolkit's `restyle_chain.py`) before rebuilding the mod. Pick a dozen or two poses per
+character: a single pose only covers the pieces visible in it.
+
 Optional per-game key `"portrait_filter": "any"` lists non-square textures too (they are squashed to a
 square for generation and restored to their size on export).
 
