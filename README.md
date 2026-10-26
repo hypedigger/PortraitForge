@@ -78,6 +78,11 @@ The work directory is produced by the toolkit (`make_workdir.py`): `_originals/`
 textures you want to restyle and `_originals/_sources.json` maps each file back to the archive. The toolkit
 for *13 Sentinels: Aegis Rim* (Switch) is a separate project (NSP → CPK → FTEX/BC7 textures → PNG and back).
 
+**Regions.** A `"type": "region"` source is a sprite cut out of a larger texture (for 13 Sentinels: the
+cockpit portraits of the pilots and their eye and mouth sprites, extracted by the toolkit's `make_region_workdir.py`).
+The original is the sprite padded to a square; on export the chosen image is cropped and pasted back at the
+sprite's rectangle, alpha kept, and several regions of one texture accumulate.
+
 **Character poses.** The same exporter also accepts *pose* sources (entries with `"type": "pose"` in
 `_originals/_sources.json`, produced by the toolkit's `make_pose_workdir.py`): the original is a rendered pose of an
 animated character, padded to a square. On export the chosen image is cropped back to the pose and stored as

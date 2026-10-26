@@ -17,6 +17,9 @@ Le dossier _originals du jeu doit contenir _sources.json (ecrit par make_workdir
 du toolkit) : nom du PNG d'origine -> description de la source. Deux types :
 - texture (defaut) : {"png": chemin relatif dans l'export, "sha1": ...} ; l'image choisie remplace la texture
   (et ses doublons de meme sha1 dans les archives de langue).
+- region : {"type": "region", "png", "rect": [x, y, l, h], "pad", "square", "alpha": "keep"} ; l'original est
+  un sprite decoupe dans une texture (mis au carre par des marges) ; l'image choisie est recadree et recollee
+  a sa place dans la texture (alpha d'origine conserve) ; plusieurs regions d'une meme texture se cumulent.
 - pose : {"type": "pose", "pose_dir", "stem", "pad", "size", "mbs", "atlas_rel", "selection", "atlas_pngs"} ;
   l'image choisie est recadree (les marges qui la mettaient au carre sont retirees) et rangee comme version
   modifiee de la pose ; a la reconstruction, restyle_chain.py redecoupe toutes les poses modifiees du
@@ -96,12 +99,71 @@ class CpkModExporter:
             groups.setdefault(key, []).append(src)
         return groups
 
+    # -------------------------------------------------------------- regions
+    def _region_paths(self, src):
+        """(PNG de la texture dans l'export, PNG dans import_dir, fichier annexe listant les regions modifiees)."""
+        exp = os.path.join(self.cfg["export_dir"], src["png"].replace("\\", os.sep).replace("/", os.sep))
+        imp = self._dst(src["png"])
+        return exp, imp, imp + ".regions.json"
+
+    def _region_state(self, side):
+        try:
+            with open(side, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+    def _region_install(self, name, src, image):
+        from PIL import Image
+        exp, imp, side = self._region_paths(src)
+        x, y, w, h = src["rect"]
+        px, py = src["pad"]
+        if image.size != (src["square"], src["square"]):
+            image = image.resize((src["square"], src["square"]))
+        crop = image.convert("RGBA").crop((px, py, px + w, py + h))
+        base = Image.open(imp if os.path.exists(imp) else exp).convert("RGBA")
+        region = base.crop((x, y, x + w, y + h))
+        if src.get("alpha", "keep") == "keep":
+            crop.putalpha(region.getchannel("A"))
+        base.paste(crop, (x, y))
+        os.makedirs(os.path.dirname(imp), exist_ok=True)
+        base.save(imp)
+        state = self._region_state(side)
+        state[name] = src["rect"]
+        with open(side, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+        return 1
+
+    def _region_remove(self, name, src):
+        from PIL import Image
+        exp, imp, side = self._region_paths(src)
+        if not os.path.exists(imp):
+            return 0
+        state = self._region_state(side)
+        if name not in state:
+            return 0
+        del state[name]
+        if not state:
+            os.remove(imp)
+            if os.path.exists(side):
+                os.remove(side)
+            return 1
+        x, y, w, h = src["rect"]
+        base = Image.open(imp).convert("RGBA")
+        base.paste(Image.open(exp).convert("RGBA").crop((x, y, x + w, y + h)), (x, y))
+        base.save(imp)
+        with open(side, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+        return 1
+
     # ------------------------------------------------------------ interface
     def install(self, name, image):
         """Depose l'image (deja a la taille de l'original). Retourne le nombre de fichiers ecrits."""
         src = self.sources().get(name)
         if not src:
             return 0
+        if src.get("type") == "region":
+            return self._region_install(name, src, image)
         if src.get("type") == "pose":
             px, py = src["pad"]
             w, h = src["size"]
@@ -124,6 +186,8 @@ class CpkModExporter:
         src = self.sources().get(name)
         if not src:
             return 0
+        if src.get("type") == "region":
+            return self._region_remove(name, src)
         if src.get("type") == "pose":
             dst = self._pose_mod_path(src)
             if os.path.exists(dst):
