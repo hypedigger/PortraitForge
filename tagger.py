@@ -35,8 +35,21 @@ KEEP_WORDS = (
     "shirt", "vest", "cape", "uniform", "furry", "colored skin", "old man",
     "old woman", "child", "beak", "whiskers",
 )
-DROP_TAGS = {"1boy", "1girl", "male focus", "solo", "portrait", "looking at viewer"}
-MAX_TAGS = 14
+DROP_TAGS = {"1boy", "1girl", "male focus", "solo", "portrait", "looking at viewer",
+             # faux positifs du filtre par sous-chaine ("hat" dans what,
+             # "hair" dans chair...)
+             "what", "invisible chair"}
+# expressions : indispensables quand chaque pose/expression est une texture
+# distincte (sprites de visual novel) — sans elles, le style peut "nettoyer"
+# les larmes ou neutraliser un sourire malgre le ControlNet
+EXPRESSION_WORDS = (
+    "closed eyes", "one eye closed", "wink", "crying", "tears", "sobbing",
+    "smile", "smirk", "grin", "laughing", "frown", "pout", "angry", "sad",
+    "surprised", "scared", "embarrassed", "blush", "open mouth",
+    "closed mouth", "tongue", "clenched teeth", "parted lips", "sleeping",
+    "expressionless", "serious", "worried", "nervous", "happy",
+)
+MAX_TAGS = 16
 
 
 def _download(url, dest):
@@ -79,7 +92,8 @@ def tag_image(sess, tags, path, threshold):
     for (name, cat), p in zip(tags, probs):
         if cat != 0 or p < threshold or name in DROP_TAGS:
             continue
-        if any(w in name for w in KEEP_WORDS):
+        if any(w in name for w in KEEP_WORDS) \
+           or any(w in name for w in EXPRESSION_WORDS):
             found.append((name, float(p)))
     found.sort(key=lambda x: -x[1])
     return [n for n, _ in found[:MAX_TAGS]]
@@ -91,6 +105,9 @@ def main():
     ap.add_argument("--threshold", type=float,
                     default=xs.load_app_settings().get("tag_threshold", 0.35))
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--sex", default=None, choices=["male", "female", "other"],
+                    help="ne (re)tagger que les personnages de ce sexe "
+                         "(defini dans l'interface ; defaut male si non defini)")
     args = ap.parse_args()
 
     existing = {}
@@ -102,6 +119,10 @@ def main():
     portraits = xs.list_portraits()
     if args.stem:
         portraits = [p for p in portraits if p["stem"] == args.stem]
+    if args.sex:
+        meta = xs.load_portrait_meta()
+        portraits = [p for p in portraits
+                     if (meta.get(p["stem"]) or {}).get("sex", "male") == args.sex]
     for i, p in enumerate(portraits):
         if p["stem"] in existing and not args.force:
             continue
