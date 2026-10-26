@@ -1296,6 +1296,16 @@ function optOpen(){
   document.getElementById('optpop').style.display='block';
 }
 function optClose(){document.getElementById('optpop').style.display='none';}
+/* retire du jeu toutes les textures installees par l'app */
+async function removeInstalled(){
+  if(!confirm(T('Retirer du jeu TOUTES les textures installées par l\'app ?\nLe jeu retrouve ses textures natives (les backups du pack sont remis en place).\nTu peux les réinstaller à tout moment avec Exporter.'))) return;
+  const r=await (await fetch('/api/remove_installed',{method:'POST',body:'{}'})).json();
+  if(!r.pack_found){toast(T('Répertoire du pack introuvable — vérifie le chemin dans les options'));return;}
+  let msg='🗑 '+r.removed+' textures retirées du jeu';
+  if(r.restored_backups) msg+=' ('+r.restored_backups+' backups du pack remis en place)';
+  if(r.mod) msg+=' — mod reconstruit';
+  toast(msg);
+}
 /* suffixe de prompt propre au jeu courant (vide = suffixe commun) */
 async function gameSuffixSave(){
   const v=document.getElementById('optGameSuffix').value.trim();

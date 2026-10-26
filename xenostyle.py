@@ -1031,6 +1031,35 @@ def restore_originals(pack_dir=None):
     return {"restored": n, "pack_found": True}
 
 
+def remove_installed(pack_dir=None):
+    """Retire du jeu les textures installees par l'app.
+
+    - exporteur externe (mod CPK...) : remove() par texture puis rebuild ;
+    - pack classique : supprime pack/<nom> pour chaque portrait ; si le pack
+      avait deja ce fichier avant nous (_pack_backup), le backup est remis
+      en place."""
+    import shutil
+    if EXPORTER is not None:
+        n = sum(1 for p in list_portraits() if EXPORTER.remove(p["name"]))
+        return {"removed": n, "restored_backups": 0, "pack_found": True,
+                "mod": EXPORTER.rebuild() if n else None}
+    pack = pack_dir or PACK_DIR
+    if not os.path.isdir(pack):
+        return {"removed": 0, "restored_backups": 0, "pack_found": False}
+    removed, restored = 0, 0
+    for p in list_portraits():
+        f = os.path.join(pack, p["name"])
+        if os.path.exists(f):
+            os.remove(f)
+            removed += 1
+        b = os.path.join(PACK_BACKUP_DIR, p["name"])
+        if os.path.exists(b):
+            shutil.move(b, f)
+            restored += 1
+    return {"removed": removed, "restored_backups": restored,
+            "pack_found": True}
+
+
 def export_final(styles_order, pack_dir=None):
     """Exporte une image par personnage : choix final explicite, sinon la
     premiere variante disponible en parcourant les styles dans l'ordre."""

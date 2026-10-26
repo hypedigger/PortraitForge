@@ -176,8 +176,9 @@
   <div style="margin-top:6px">
    <label title="sauvegarde l'original du pack dans _pack_backup au premier remplacement"><input type="checkbox" id="optBackup" checked onchange="optSave()"> Backup du pack avant écrasement ⓘ</label>
   </div>
-  <div style="margin-top:10px">
+  <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
    <button onclick="restoreOriginals()" title="recopie les portraits de _originals dans le pack">↩ Restaurer les portraits d'origine</button>
+   <button class="dangerbtn" onclick="removeInstalled()" title="retire du jeu toutes les textures installées par l'app (le jeu retrouve ses textures natives) ; les backups du pack sont remis en place. Ré-exportable à tout moment">🗑 Retirer les textures du jeu</button>
   </div>
  </div>
  <div id="osecK" class="osec" style="display:none">

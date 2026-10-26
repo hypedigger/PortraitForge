@@ -98,6 +98,11 @@ const PF_I18N_EN = {
   "sauvegarde l'original du pack dans _pack_backup au premier remplacement": "saves the pack's original into _pack_backup on first replacement",
   "↩ Restaurer les portraits d'origine": "↩ Restore original portraits",
   "recopie les portraits de _originals dans le pack": "copies the _originals portraits back into the pack",
+  "🗑 Retirer les textures du jeu": "🗑 Remove textures from the game",
+  "retire du jeu toutes les textures installées par l'app (le jeu retrouve ses textures natives) ; les backups du pack sont remis en place. Ré-exportable à tout moment": "removes every texture the app installed (the game falls back to its native textures); pack backups are put back in place. Re-exportable anytime",
+  "Retirer du jeu TOUTES les textures installées par l'app ?": "Remove ALL textures installed by the app from the game?",
+  "Le jeu retrouve ses textures natives (les backups du pack sont remis en place).": "The game falls back to its native textures (pack backups are put back in place).",
+  "Tu peux les réinstaller à tout moment avec Exporter.": "You can reinstall them anytime with Export.",
   "Clé API Civitai :": "Civitai API key:",
   "32 caractères hexadécimaux": "32 hexadecimal characters",
   "Fermer": "Close",
@@ -401,7 +406,10 @@ const PF_I18N_RULES = [
   [/^🖼 Génération de la planche contact \((\d+) persos\)…$/, "🖼 Building the contact sheet ($1 characters)…"],
   [/^⚙ En cours : (.*)$/, "⚙ Running: $1"],
   [/^Lot : (\d+)\/(\d+) \((\d+)%\)(.*)$/, "Batch: $1/$2 ($3%)$4"],
-  [/^En attente : (.*)$/, "Queued: $1"]
+  [/^En attente : (.*)$/, "Queued: $1"],
+  [/^🗑 (\d+) textures retirées du jeu(.*)$/, "🗑 $1 textures removed from the game$2"],
+  [/^ \((\d+) backups du pack remis en place\)$/, " ($1 pack backups put back)"],
+  [/ — mod reconstruit$/, " — mod rebuilt"]
 ];
 
 /* ---------------- moteur ---------------- */

@@ -1011,6 +1011,11 @@ class Handler(BaseHTTPRequestHandler):
                     xs.save_games(g)
                     break
             self._json({"ok": True})
+        elif p == "/api/remove_installed":
+            r = xs.remove_installed()
+            self._json({"ok": True, "removed": r["removed"],
+                        "restored_backups": r["restored_backups"],
+                        "pack_found": r["pack_found"], "mod": r.get("mod")})
         elif p == "/api/restore_originals":
             r = xs.restore_originals()
             self._json({"ok": True, "restored": r["restored"],
