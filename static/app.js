@@ -93,7 +93,7 @@ function gameOpen(){
     d.innerHTML='<div class="gtitle"><span class="gname">'+g.name+'</span>'+
       (cur?'<span class="gcur">jeu actuel</span>':'')+'</div>'+
       '<div class="gpath"><span class="gk">travail</span>'+g.work_dir+'</div>'+
-      (g.pack_dir?('<div class="gpath"><span class="gk">destination</span>'+g.pack_dir+'</div>'):
+      ((g.destination||g.pack_dir)?('<div class="gpath"><span class="gk">destination</span>'+(g.destination||g.pack_dir)+'</div>'):
        '<div class="gpath"><span class="gk">destination</span><i>non définie</i></div>');
     d.onclick=()=>gameSelect(g.id);
     list.appendChild(d);
@@ -1251,6 +1251,13 @@ function optOpen(){
   document.getElementById('optCustomCount').value=s.custom_count||5;
   document.getElementById('optGenAll').value=s.gen_all_count||2;
   document.getElementById('optPackDir').value=(S.game&&S.game.pack_dir)||'';
+  /* jeu a exporteur externe (mod) : dossier load + nom du mod a la place du pack */
+  const ex=S.game&&S.game.exporter;
+  document.getElementById('optPackRow').style.display=ex?'none':'';
+  document.getElementById('optModRow').style.display=ex?'':'none';
+  document.getElementById('optModLoad').value=(ex&&ex.load_dir)||'';
+  document.getElementById('optModName').value=(ex&&ex.mod_name)||'';
+  document.getElementById('optModDest').textContent=(S.game&&S.game.destination)||'';
   document.getElementById('optComfy').value=s.comfy_url||'';
   document.getElementById('optCivitai').value=s.civitai_api_key||'';
   document.getElementById('optGenSteps').value=s.gen_steps||'';
@@ -1370,6 +1377,16 @@ async function optSave(){
   if(S.game&&pd!==(S.game.pack_dir||'')){
     await fetch('/api/game_pack',{method:'POST',body:JSON.stringify({pack_dir:pd})});
     S.game.pack_dir=pd;
+  }
+  const ex=S.game&&S.game.exporter;
+  if(ex){
+    const ld=document.getElementById('optModLoad').value.trim();
+    const mn=document.getElementById('optModName').value.trim();
+    if(ld!==(ex.load_dir||'')||mn!==(ex.mod_name||'')){
+      const r=await (await fetch('/api/game_pack',{method:'POST',body:JSON.stringify({load_dir:ld,mod_name:mn})})).json();
+      ex.load_dir=ld; ex.mod_name=mn;
+      if(r.destination){S.game.destination=r.destination;document.getElementById('optModDest').textContent=r.destination;}
+    }
   }
   await refresh();
   applyThumbSize(); buildStyleSel(); render();

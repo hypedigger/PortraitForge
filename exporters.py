@@ -24,6 +24,9 @@ du toolkit) : nom du PNG d'origine -> description de la source. Deux types :
   l'image choisie est recadree (les marges qui la mettaient au carre sont retirees) et rangee comme version
   modifiee de la pose ; a la reconstruction, restyle_chain.py redecoupe toutes les poses modifiees du
   personnage dans ses atlas, dans l'ordre de la selection, puis import_mod.py reconstruit le mod.
+- mesh : {"type": "mesh", "render", "png", "sha1", "pad", "size", "square"} ; l'original est une illustration
+  assemblee depuis un maillage .fmd (make_mesh_workdir.py) ; l'image choisie est recadree en <render>_mod.png
+  et, a la reconstruction, fmd.py split recolle chaque triangle visible dans la texture.
 """
 import json
 import os
@@ -45,6 +48,14 @@ class CpkModExporter:
     @property
     def label(self):
         return self.cfg.get("mod_name") or "mod"
+
+    TITLE_ID = "01003FC01670C000"  # 13 Sentinels: Aegis Rim (Switch) ; surcharge : cle "title_id"
+
+    @property
+    def destination(self):
+        """Dossier ou le mod est reconstruit : <load_dir>\\<title id>\\<mod_name>\\romfs."""
+        return os.path.join(self.cfg.get("load_dir") or "", self.cfg.get("title_id") or self.TITLE_ID,
+                            self.cfg.get("mod_name") or "mod", "romfs")
 
     def sources(self):
         if self._sources is None:
@@ -75,7 +86,7 @@ class CpkModExporter:
     def targets(self, name):
         """Chemins relatifs (dans import_dir) a ecrire pour un PNG de _originals de type texture."""
         src = self.sources().get(name)
-        if not src or src.get("type") == "pose":
+        if not src or src.get("type") in ("pose", "mesh"):
             return []
         rels = list(self._duplicates().get(src.get("sha1"), []))
         if src["png"] not in rels:
@@ -98,6 +109,46 @@ class CpkModExporter:
             key = (src["mbs"], src["atlas_rel"], src["selection"], src["pose_dir"])
             groups.setdefault(key, []).append(src)
         return groups
+
+    # ------------------------------------------------------------- maillages
+    def _mesh_mod_path(self, src):
+        return os.path.splitext(src["render"])[0] + "_mod.png"
+
+    def _mesh_targets(self, src):
+        """Chemins relatifs de la texture et de ses doublons (autres archives)."""
+        rels = list(self._duplicates().get(src.get("sha1"), []))
+        if src["png"] not in rels:
+            rels.insert(0, src["png"])
+        return rels
+
+    def _mesh_rebuild(self, src, log):
+        """Recolle le rendu modifie dans la texture (fmd.py split) ; sans rendu modifie, retire la texture du mod."""
+        tk = self.cfg["toolkit_dir"]
+        mod = self._mesh_mod_path(src)
+        exp = os.path.join(self.cfg["export_dir"], src["png"].replace("\\", os.sep).replace("/", os.sep))
+        rels = self._mesh_targets(src)
+        first = self._dst(rels[0])
+        marker = first + ".mesh.json"
+        if os.path.exists(mod):
+            os.makedirs(os.path.dirname(first), exist_ok=True)
+            ok, err, out = self._run([os.path.join(tk, "fmd.py"), "split", src["render"], mod, exp, first], 1800)
+            log.append("%s : %s" % (os.path.basename(src["png"]), out.splitlines()[-1] if out else err))
+            if not ok:
+                return False, "fmd.py split %s" % err, out
+            with open(marker, "w", encoding="utf-8") as f:
+                json.dump({"render": src["render"]}, f)
+            for rel in rels[1:]:
+                dst = self._dst(rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copyfile(first, dst)
+        elif os.path.exists(marker):
+            for rel in rels:
+                dst = self._dst(rel)
+                if os.path.exists(dst):
+                    os.remove(dst)
+            os.remove(marker)
+            log.append("%s : plus de rendu modifie, texture retiree du mod" % os.path.basename(src["png"]))
+        return True, "", ""
 
     # -------------------------------------------------------------- regions
     def _region_paths(self, src):
@@ -164,13 +215,13 @@ class CpkModExporter:
             return 0
         if src.get("type") == "region":
             return self._region_install(name, src, image)
-        if src.get("type") == "pose":
+        if src.get("type") in ("pose", "mesh"):
             px, py = src["pad"]
             w, h = src["size"]
             if image.size != (src["square"], src["square"]):
                 image = image.resize((src["square"], src["square"]))
             crop = image.crop((px, py, px + w, py + h))
-            dst = self._pose_mod_path(src)
+            dst = self._pose_mod_path(src) if src["type"] == "pose" else self._mesh_mod_path(src)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             crop.save(dst)
             return 1
@@ -188,8 +239,8 @@ class CpkModExporter:
             return 0
         if src.get("type") == "region":
             return self._region_remove(name, src)
-        if src.get("type") == "pose":
-            dst = self._pose_mod_path(src)
+        if src.get("type") in ("pose", "mesh"):
+            dst = self._pose_mod_path(src) if src["type"] == "pose" else self._mesh_mod_path(src)
             if os.path.exists(dst):
                 os.remove(dst)
                 return 1
@@ -230,6 +281,11 @@ class CpkModExporter:
                     if os.path.exists(p):
                         os.remove(p)
                 log.append("%s : plus de pose modifiee, atlas retires du mod" % os.path.basename(atlas_rel))
+        for src in self.sources().values():
+            if src.get("type") == "mesh":
+                ok, err, out = self._mesh_rebuild(src, log)
+                if not ok:
+                    return {"ok": False, "error": err, "output": "\n".join(log + [out])}
         cmd = [os.path.join(tk, "import_mod.py"), self.cfg["export_dir"], self.cfg["import_dir"],
                self.cfg["load_dir"], self.cfg["mod_name"]]
         if self.cfg.get("texconv"):

@@ -51,6 +51,15 @@ def current_game():
     return g["games"][0]
 
 
+def game_destination(game):
+    """Ou vont les images exportees : le pack de textures, ou le dossier du mod
+    pour un jeu a exporteur externe (cle "exporter" de games.json)."""
+    ext = exporters.get_exporter(game)
+    if ext is not None:
+        return ext.destination
+    return game.get("pack_dir") or ""
+
+
 def set_game(game):
     """Pointe toute la bibliotheque sur un jeu (repertoires + fichiers d'etat).
 

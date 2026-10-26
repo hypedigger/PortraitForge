@@ -72,7 +72,9 @@ pack folder: each chosen image is resized to its texture's exact size, dropped i
 folder at the path recorded for that texture, and the toolkit's `import_mod.py` rebuilds the game archive as a
 LayeredFS mod (Eden / Ryujinx / Atmosphère). The rebuild can take a few minutes; its last lines are shown in
 the browser console if it fails. Textures that the game stores several times (language archives) are all
-updated at once.
+updated at once. The destination of such a game is the mod folder (`<load_dir>\<title id>\<mod_name>\romfs`):
+it is shown on the game card and in *Options → Chemins*, where the emulator's `load` folder and the mod name
+can be changed (an already built mod is moved along); *📂 Pack* opens it.
 
 The work directory is produced by the toolkit (`make_workdir.py`): `_originals/` holds flat copies of the
 textures you want to restyle and `_originals/_sources.json` maps each file back to the archive. The toolkit
@@ -89,6 +91,12 @@ animated character, padded to a square. On export the chosen image is cropped ba
 `<pose>_mod.png`; the rebuild then splits every modified pose of that character back into its texture atlases
 (cumulatively, through the toolkit's `restyle_chain.py`) before rebuilding the mod. Pick a dozen or two poses per
 character: a single pose only covers the pieces visible in it.
+
+**Assembled illustrations (meshes).** A `"type": "mesh"` source (toolkit's `make_mesh_workdir.py`) is an
+illustration whose texture holds scattered pieces put together by a small 2.5D mesh (13 Sentinels'
+`CharacterStand` character sheets). The original is the assembled render, padded to a square; on export the
+chosen image is cropped back and the rebuild writes every visible triangle back into the texture (toolkit's
+`fmd.py split`, original alpha kept).
 
 Optional per-game key `"portrait_filter": "any"` lists non-square textures too (they are squashed to a
 square for generation and restored to their size on export).

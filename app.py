@@ -576,6 +576,7 @@ class Handler(BaseHTTPRequestHandler):
             cfg = xs.load_styles()
             d = cfg["defaults"]
             s_app = load_settings()
+            game = xs.current_game()
             styles = [{"key": k, "label": v["label"],
                        "lora_strength": v.get("lora_strength", 0.9),
                        "denoise": v.get("denoise", d["denoise"]),
@@ -600,8 +601,9 @@ class Handler(BaseHTTPRequestHandler):
                         "words": xs.load_portrait_words(),
                         "final": xs.load_final(),
                         "settings": load_settings(),
-                        "game": xs.current_game(),
-                        "games": xs.load_games()["games"],
+                        "game": dict(game, destination=xs.game_destination(game)),
+                        "games": [dict(x, destination=xs.game_destination(x))
+                                  for x in xs.load_games()["games"]],
                         "tags_done": len(xs.load_portrait_tags()) > 0,
                         "defaults": {
                             "pony_prefix": cfg["defaults"]["pony"]["prefix"],
@@ -990,14 +992,34 @@ class Handler(BaseHTTPRequestHandler):
             switch_game(gid)
             self._json({"ok": True, "id": gid})
         elif p == "/api/game_pack":
+            # destination du jeu courant : pack_dir (pack classique) ou, pour un
+            # exporteur externe, le dossier load de l'emulateur + le nom du mod
             g = xs.load_games()
             for game in g["games"]:
                 if game["id"] == g.get("current"):
-                    game["pack_dir"] = (body.get("pack_dir") or "").strip()
+                    if "pack_dir" in body:
+                        game["pack_dir"] = (body.get("pack_dir") or "").strip().strip('"')
+                    ex = game.get("exporter")
+                    if isinstance(ex, dict):
+                        old = xs.game_destination(game)
+                        for k in ("load_dir", "mod_name"):
+                            if k in body:
+                                ex[k] = (body.get(k) or "").strip().strip('"')
+                        new = xs.game_destination(game)
+                        old_root, new_root = os.path.dirname(old), os.path.dirname(new)
+                        if old != new and os.path.isdir(old) and not os.path.exists(new_root):
+                            # mod deja construit : on le deplace sous son nouveau nom/dossier
+                            try:
+                                import shutil
+                                os.makedirs(os.path.dirname(new_root), exist_ok=True)
+                                shutil.move(old_root, new_root)
+                            except OSError:
+                                pass
                     xs.save_games(g)
                     xs.set_game(game)
-                    break
-            self._json({"ok": True})
+                    self._json({"ok": True, "destination": xs.game_destination(game)})
+                    return
+            self._json({"ok": False, "error": "jeu courant introuvable"}, 404)
         elif p == "/api/game_suffix":
             # suffixe de prompt propre au jeu courant (vide = suffixe commun)
             g = xs.load_games()
@@ -1384,11 +1406,15 @@ class Handler(BaseHTTPRequestHandler):
         elif p == "/api/open_dir":
             dirs = {"selected": xs.EXPORT_DIR,
                     "backup": xs.PACK_BACKUP_DIR,
-                    "pack": xs.PACK_DIR,
+                    "pack": xs.EXPORTER.destination if xs.EXPORTER is not None else xs.PACK_DIR,
                     "thumbs": THUMB_DIR,
                     "work": xs.PROJECT_DIR,
                     "stylized": xs.STYLIZED_DIR}
             d = dirs.get(body.get("which"))
+            if d and body.get("which") == "pack" and xs.EXPORTER is not None:
+                # mod pas encore construit : ouvrir le premier parent existant
+                while d and not os.path.isdir(d) and os.path.dirname(d) != d:
+                    d = os.path.dirname(d)
             if d and os.path.isdir(d):
                 subprocess.Popen(["explorer", d])
                 self._json({"ok": True})

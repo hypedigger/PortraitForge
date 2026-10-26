@@ -159,8 +159,20 @@
   </div>
  </div>
  <div id="osecC" class="osec" style="display:none">
-  <label>Répertoire du pack de textures (export) :</label>
-  <input id="optPackDir" type="text" style="width:100%;box-sizing:border-box;margin-top:4px;background:#181c22;border:1px solid #444;border-radius:6px;color:#ddd;padding:6px;font-size:12px" onchange="optSave()">
+  <div id="optPackRow">
+   <label>Répertoire du pack de textures (export) :</label>
+   <input id="optPackDir" type="text" style="width:100%;box-sizing:border-box;margin-top:4px;background:#181c22;border:1px solid #444;border-radius:6px;color:#ddd;padding:6px;font-size:12px" onchange="optSave()">
+  </div>
+  <div id="optModRow" style="display:none">
+   <label>Destination du mod (dossier « load » de l'émulateur) :</label>
+   <div class="dirrow" style="margin-top:4px">
+    <input id="optModLoad" type="text" style="flex:1;box-sizing:border-box;background:#181c22;border:1px solid #444;border-radius:6px;color:#ddd;padding:6px;font-size:12px" placeholder="%APPDATA%\yuzu\load" onchange="optSave()">
+    <button onclick="pickDir('optModLoad').then(optSave)" title="choisir avec l'explorateur Windows">📂 Parcourir…</button>
+   </div>
+   <label style="display:block;margin-top:8px">Nom du mod :</label>
+   <input id="optModName" type="text" style="width:100%;box-sizing:border-box;margin-top:4px;background:#181c22;border:1px solid #444;border-radius:6px;color:#ddd;padding:6px;font-size:12px" onchange="optSave()">
+   <div style="margin-top:6px;font-size:12px;color:var(--dim)">Les textures exportées sont reconstruites dans : <code id="optModDest" style="color:#ddd"></code></div>
+  </div>
   <div style="margin-top:8px"><label>URL de ComfyUI (vide = http://127.0.0.1:8188) :</label>
    <input id="optComfy" type="text" style="width:100%;box-sizing:border-box;margin-top:4px;background:#181c22;border:1px solid #444;border-radius:6px;color:#ddd;padding:6px;font-size:12px" placeholder="http://127.0.0.1:8188" onchange="optSave()">
   </div>
