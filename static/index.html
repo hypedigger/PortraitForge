@@ -345,9 +345,9 @@
  <label>Denoise : <span id="dnval">0.70</span></label>
  <input id="popDn" type="range" min="0" max="1" step="0.05" value="0.7" oninput="dnExplain()">
  <div id="dnexpl"></div>
- <div class="qty"><label style="width:110px">Force LoRA</label><input id="popLora" type="number" step="0.05" min="0" max="1.5"></div>
- <div class="qty"><label style="width:110px">ControlNet</label><input id="popCnet" type="number" step="0.05" min="0" max="1"></div>
- <div class="qty"><label style="width:110px">ControlNet fin</label><input id="popCend" type="number" step="0.05" min="0" max="1"></div>
+ <div class="qty"><label style="width:110px" title="intensité du style de l'artiste (LoRA) : 0 = désactivé, 0.7 = discret, 0.9–1.0 = normal, 1.2+ = très marqué mais risque de déformations. Monte si le style ne se voit pas assez, descends si les visages se dégradent">Force LoRA ⓘ</label><input id="popLora" type="number" step="0.05" min="0" max="1.5" title="0 = désactivé · 0.9–1.0 = normal · 1.2+ = style très marqué (risque d'artefacts)"></div>
+ <div class="qty"><label style="width:110px" title="force avec laquelle les CONTOURS de l'image d'origine guident la génération (pose, silhouette, visage). 0.3–0.4 = souple (le style s'exprime, ressemblance approximative), 0.5 = équilibré, 0.7–1.0 = colle au trait d'origine (fidèle mais style bridé)">ControlNet ⓘ</label><input id="popCnet" type="number" step="0.05" min="0" max="1" title="0.3–0.4 = souple · 0.5 = équilibré · 0.7+ = très fidèle au trait, style bridé"></div>
+ <div class="qty"><label style="width:110px" title="moment où le ControlNet LÂCHE PRISE, en fraction de la génération : 0.6 = lâche tôt (l'artiste finit librement les détails), 0.75 = équilibré, 1.0 = contraint jusqu'au bout. Baisse cette valeur pour des finitions plus stylées, monte-la si la pose dérive">ControlNet fin ⓘ</label><input id="popCend" type="number" step="0.05" min="0" max="1" title="0.6 = lâche tôt (détails libres) · 0.75 = équilibré · 1.0 = contraint jusqu'au bout"></div>
  <div class="qty" id="popSeedRow"><label title="vide = aléatoire ; fixer une seed permet de reproduire/varier finement une image">Seed (vide = aléatoire) :</label>
   <input id="popSeed" type="number" min="0" style="width:130px">
   <label id="popSeedReuseWrap" style="display:none;cursor:pointer" title="reprendre la seed exacte de l'image consultée"><input type="checkbox" id="popSeedReuse" onchange="popSeedReuseToggle()"> même seed</label></div>
