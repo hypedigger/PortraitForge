@@ -222,6 +222,8 @@ function dispSelMix(key){
    selection explicite */
 function finalChoice(stem){
   const ref=S.final[stem];
+  if(ref==='__none__') /* choix explicite "aucun envoi" : rien n'est exporte */
+    return {style:'__none__',file:null,explicit:true,none:true};
   if(ref==='__original__')
     return {style:'__original__',file:null,explicit:true,original:true};
   if(ref){
@@ -258,7 +260,7 @@ function selCountUpd(){
   if(mode==='detail'){
     for(const p of ps) if(effSel(style+'/'+p.stem)) n++;
   }else{
-    for(const p of ps) if(finalChoice(p.stem)) n++;
+    for(const p of ps){const fc=finalChoice(p.stem);if(fc&&!fc.none) n++;}
   }
   document.getElementById('selCount').textContent=n;
 }
@@ -376,6 +378,8 @@ function renderMatrix(){
 }
 /* cellule "Choix" : l'image globale exportée pour ce personnage */
 function choiceCell(stem,fc){
+  if(fc&&fc.none)
+    return '<td><div class="mempty mnone" data-tip="aucun envoi pour ce personnage (choix explicite) · clic gauche : toutes les versions" onclick="verOpenAll(event,\''+stem+'\')">🚫</div></td>';
   if(fc&&fc.original)
     return '<td class="msel"><img class="thumb" loading="lazy" src="/thumb/original/'+stem+'" '+
       'data-tip="texture originale · clic gauche : toutes les versions · clic droit : zoom" onclick="verOpenAll(event,\''+stem+'\')"></td>';
@@ -972,7 +976,7 @@ async function contactSheet(){
   const items=[];
   for(const p of visiblePortraits()){
     const fc=finalChoice(p.stem);
-    if(!fc) continue;
+    if(!fc||fc.none) continue;
     items.push(fc.original?{stem:p.stem,original:true}
                           :{stem:p.stem,style:fc.style,file:fc.file});
   }
@@ -1190,7 +1194,7 @@ function renderMix(){
   let totalSel=0;
   for(const p of visiblePortraits()){
     const fc=finalChoice(p.stem);
-    if(fc){counts[fc.style]=(counts[fc.style]||0)+1;totalSel++;}
+    if(fc&&!fc.none){counts[fc.style]=(counts[fc.style]||0)+1;totalSel++;}
   }
   const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   let h='<div class="mixstats">🏆 Artistes les plus sélectionnés ('+totalSel+' persos) : '+
@@ -1203,10 +1207,13 @@ function renderMix(){
   for(const p of visiblePortraits()){
     const fc=finalChoice(p.stem);
     const isOrig=!!(fc&&fc.original);
+    const isNone=!!(fc&&fc.none);
     h+='<tr><td class="mstem" onclick="verOpenAll(event,\''+p.stem+'\')" data-tip="clic gauche : toutes les versions de ce portrait">'+p.stem+'</td>';
-    h+='<td class="'+(isOrig?'msel':'')+'"><img class="oimg thumb" loading="lazy" src="/thumb/original/'+p.stem+'" '+
-      'style="cursor:pointer" data-tip="clic gauche : garder la texture ORIGINALE pour ce personnage · clic droit : zoom" '+
-      'onclick="mixSelect(\''+p.stem+'\',\'__original__\')"></td>';
+    h+='<td class="'+(isOrig?'msel':'')+'"><div style="position:relative;display:inline-block">'+
+      (isNone?'<span class="noneover" data-tip="aucun envoi pour ce personnage (choix explicite)">🚫</span>':'')+
+      '<img class="oimg thumb" loading="lazy" src="/thumb/original/'+p.stem+'" '+
+      'style="cursor:pointer" data-tip="clic gauche : garder la texture ORIGINALE · re-clic : AUCUN envoi pour ce personnage · re-clic : retour au choix auto · clic droit : zoom" '+
+      'onclick="mixOrigClick(\''+p.stem+'\')"></div></td>';
     h+=choiceCell(p.stem,fc);
     for(const st of colStyles()){
       const key=st.key+'/'+p.stem;
@@ -1233,6 +1240,16 @@ function renderMix(){
   measureMixSticky();
   setupMwrap();
   setTimeout(measureMixSticky,350); /* re-mesure apres stabilisation du layout */
+}
+/* clic sur l'Original en Selection globale : cycle a 3 etats
+   (auto/vide) -> texture originale -> AUCUN envoi -> retour auto */
+async function mixOrigClick(stem){
+  const cur=S.final[stem];
+  const nv=(cur==='__original__')?'__none__':(cur==='__none__')?null:'__original__';
+  await fetch('/api/final',{method:'POST',body:JSON.stringify({stem:stem,ref:nv})});
+  if(nv) S.final[stem]=nv; else delete S.final[stem];
+  if(nv==='__none__') toast('🚫 Aucun envoi pour '+stem+' — ce personnage sera sauté à l\'export (re-clic : choix auto)');
+  render();
 }
 async function mixSelect(stem,ref){
   const nv=(S.final[stem]===ref)?null:ref;
@@ -1504,7 +1521,7 @@ function vrowOpen(nImages){
 async function syncGlobalWithSelection(stem,styleKey,newFile){
   if(!newFile) return;
   const ref=S.final[stem];
-  if(!ref||ref==='__original__') return;
+  if(!ref||ref==='__original__'||ref==='__none__') return;
   const [sk]=ref.split(/\/(.+)/);
   if(sk!==styleKey) return;
   const nv=styleKey+'/'+newFile;
@@ -1623,6 +1640,7 @@ async function verPickAll(key,f,el){
 function verGlobRowHtml(stem){
   const fc=finalChoice(stem);
   if(!fc) return '';
+  if(fc.none) return '<div class="vsty">🚫 Aucun envoi pour ce personnage (choix explicite)</div>';
   const src=fc.original?('/img/original/'+stem):('/img/var/'+fc.style+'/'+stem+'/'+fc.file);
   const lbl=fc.original?'texture originale':styleLabel(fc.style)+(fc.explicit?'':' (auto)');
   return '<div class="vsty">★ Image globale — '+lbl+'</div>'+
@@ -2290,11 +2308,14 @@ function lbShow(full){
     if(S.settings&&S.settings.lb_dense){
       document.getElementById('lbdA').src='/img/original/'+lbCtx.stem;
       const B=document.getElementById('lbdB'),eB=document.getElementById('lbdemptyB');
-      if(fc){
+      if(fc&&!fc.none){
         B.src=fc.original?('/img/original/'+lbCtx.stem):('/img/var/'+fc.style+'/'+lbCtx.stem+'/'+fc.file);
         B.title='★ globale — '+(fc.original?'texture originale':styleLabel(fc.style))+' · clic : afficher';
         B.style.display='';eB.style.display='none';
-      }else{B.style.display='none';B.removeAttribute('src');eB.style.display='flex';}
+      }else{
+        B.style.display='none';B.removeAttribute('src');eB.style.display='flex';
+        eB.textContent=(fc&&fc.none)?'aucun envoi (choix explicite)':'pas d\'image globale';
+      }
       const selF2=effSel(lbCtx.style+'/'+lbCtx.stem);
       const C=document.getElementById('lbdC'),eC=document.getElementById('lbdemptyC');
       if(selF2){
@@ -2429,6 +2450,7 @@ function lbOrigHover(on){
   if(on){
     const fc=finalChoice(lbCtx.stem);
     if(!fc){cap.textContent='original (pas d\'image globale)';return;}
+    if(fc.none){cap.textContent='aucun envoi (choix explicite)';return;}
     if(fc.original){cap.textContent='image globale = originale';return;}
     o.src='/img/var/'+fc.style+'/'+lbCtx.stem+'/'+fc.file;
     cap.textContent='image globale — '+styleLabel(fc.style);

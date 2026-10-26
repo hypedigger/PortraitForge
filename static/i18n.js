@@ -197,6 +197,11 @@ const PF_I18N_EN = {
   "Mémoriser LoRA / denoise / ControlNet pour ce style": "Remember LoRA / denoise / ControlNet for this style",
   "Ajouter au prompt positif (fin de prompt) :": "Add to the positive prompt (end of prompt):",
   "Ajouter au prompt négatif (fin de prompt) :": "Add to the negative prompt (end of prompt):",
+  "aucun envoi pour ce personnage (choix explicite) · clic gauche : toutes les versions": "nothing exported for this character (explicit choice) · left click: all versions",
+  "aucun envoi pour ce personnage (choix explicite)": "nothing exported for this character (explicit choice)",
+  "clic gauche : garder la texture ORIGINALE · re-clic : AUCUN envoi pour ce personnage · re-clic : retour au choix auto · clic droit : zoom": "left click: keep the ORIGINAL texture · click again: export NOTHING for this character · click again: back to auto pick · right click: zoom",
+  "🚫 Aucun envoi pour ce personnage (choix explicite)": "🚫 Nothing exported for this character (explicit choice)",
+  "aucun envoi (choix explicite)": "nothing exported (explicit choice)",
   "📋 Prompt complet de cette image ⓘ": "📋 Full prompt of this image ⓘ",
   "prompts positif et négatif EXACTS utilisés pour générer cette image (lus dans ses métadonnées PNG). Lecture seule : les tags auto, le cadrage et les mots du personnage sont réinjectés automatiquement à chaque génération — les recopier dans les zones ci-dessus les ferait apparaître en double":
     "the EXACT positive and negative prompts used to generate this image (read from its PNG metadata). Read-only: auto tags, framing and character words are re-injected automatically on every generation — copying them into the fields above would duplicate them",
@@ -371,6 +376,8 @@ const PF_I18N_EN = {
 /* chaînes paramétrées (nombres, noms) — chaque regex ne matche QUE du français,
    la sortie anglaise n'est donc jamais retraduite */
 const PF_I18N_RULES = [
+  [/^🚫 Aucun envoi pour (.+) — ce personnage sera sauté à l'export \(re-clic : choix auto\)$/,
+   "🚫 Nothing exported for $1 — this character will be skipped at export (click again: auto pick)"],
   [/^Toutes les versions — (.+)$/, "All versions — $1"],
   [/^★ Image globale — (.+)$/, "★ Global image — $1"],
   [/^génère : (.+)$/, "generating: $1"],

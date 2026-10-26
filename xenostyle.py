@@ -1080,6 +1080,9 @@ def export_final(styles_order, pack_dir=None):
         if p["stem"] in excluded:
             continue
         ref = final.get(p["stem"])
+        if ref == "__none__":
+            # choix explicite "aucun envoi" : ne rien exporter pour ce perso
+            continue
         if ref == "__original__":
             items.append((p, None, None))
             continue
