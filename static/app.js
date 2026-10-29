@@ -2036,7 +2036,7 @@ function showExportReport(missing){
   h+='</div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">'+
     '<button onclick="verClose()">Annuler</button>'+
     '<button class="primary" onclick="verClose();exportSel(true)">Exporter quand même ('+
-      (S.portraits.length-missing.length)+' portraits)</button></div>';
+      S.portraits.filter(p=>{const c=finalChoice(p.stem);return c&&!c.none;}).length+' portraits)</button></div>';
   const vp=document.getElementById('verpop');
   vp.innerHTML=h; vp.style.display='block'; vp.scrollTop=0;
   document.getElementById('verpopbg').style.display='block';
