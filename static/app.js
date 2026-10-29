@@ -1263,7 +1263,9 @@ async function mixOrigClick(stem){
   const nv=(cur==='__original__')?'__none__':(cur==='__none__')?null:'__original__';
   await fetch('/api/final',{method:'POST',body:JSON.stringify({stem:stem,ref:nv})});
   if(nv) S.final[stem]=nv; else delete S.final[stem];
-  if(nv==='__none__') toast('🚫 Aucun envoi pour '+stem+' — ce personnage sera sauté à l\'export (re-clic : choix auto)');
+  if(nv==='__none__') toast((S.game&&S.game.exporter)
+    ?('🚫 Aucun envoi pour '+stem+' — sauté à l\'export et retiré du mod s\'il y était (re-clic : choix auto)')
+    :('🚫 Aucun envoi pour '+stem+' — ce personnage sera sauté à l\'export (re-clic : choix auto)'));
   render();
 }
 async function mixSelect(stem,ref){
@@ -2105,6 +2107,7 @@ async function exportSel(force){
     let msg='✅ '+r.count+' portraits exportés';
     if(r.mod){
       msg+=' — '+r.installed+' installés dans le mod, '+(r.mod.ok?'mod reconstruit':'❌ reconstruction du mod échouée (voir la console)');
+      if(r.removed) msg+=' ('+r.removed+' retirés du mod)';
       if(!r.mod.ok) console.error('import_mod:', r.mod.error, '\n'+r.mod.output);
     }
     else if(r.pack_found) msg+=' — '+r.installed+' installés dans le pack ('+r.backed_up+' backups créés)';

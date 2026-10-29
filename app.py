@@ -1462,6 +1462,7 @@ class Handler(BaseHTTPRequestHandler):
                         "installed": r["installed"],
                         "backed_up": r["backed_up"],
                         "pack_found": r["pack_found"],
+                        "removed": r.get("removed", 0),
                         "mod": r.get("mod")})
         else:
             self.send_response(404)

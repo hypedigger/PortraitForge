@@ -990,8 +990,9 @@ def progress_end():
 
 
 def _export_items(items, resize_to_original=None, install_to_pack=True,
-                  pack_dir=None):
-    """items = [(portrait, style_key, fname)] -> _selected/ + pack (avec backup)."""
+                  pack_dir=None, force_rebuild=False):
+    """items = [(portrait, style_key, fname)] -> _selected/ + pack (avec backup).
+    force_rebuild : reconstruire le mod meme sans image exportee (textures retirees)."""
     ext = EXPORTER if install_to_pack else None
     if ext is not None:
         resize_to_original = True  # le toolkit exige la taille exacte de la texture
@@ -1029,7 +1030,7 @@ def _export_items(items, resize_to_original=None, install_to_pack=True,
                 im.save(pack_file)
                 installed += 1
         exported.append(p["name"])
-    mod = ext.rebuild() if (ext is not None and exported) else None
+    mod = ext.rebuild() if (ext is not None and (exported or force_rebuild)) else None
     return {"exported": exported, "installed": installed,
             "backed_up": backed_up, "pack_found": pack_ok or ext is not None,
             "mod": mod}
@@ -1102,12 +1103,17 @@ def export_final(styles_order, pack_dir=None):
     sel = load_selections()
     excluded = load_excluded()
     items = []
+    removed = 0
     for p in list_portraits():
         if p["stem"] in excluded:
             continue
         ref = final.get(p["stem"])
         if ref == "__none__":
-            # choix explicite "aucun envoi" : ne rien exporter pour ce perso
+            # choix explicite "aucun envoi" : ne rien exporter pour ce perso ;
+            # avec un exporteur externe, ce qui avait ete installe pour lui
+            # est retire du mod (qui sera reconstruit)
+            if EXPORTER is not None:
+                removed += EXPORTER.remove(p["name"])
             continue
         if ref == "__original__":
             items.append((p, None, None))
@@ -1122,4 +1128,6 @@ def export_final(styles_order, pack_dir=None):
             if choice:
                 items.append((p, sk, choice))
                 break
-    return _export_items(items, pack_dir=pack_dir)
+    r = _export_items(items, pack_dir=pack_dir, force_rebuild=removed > 0)
+    r["removed"] = removed
+    return r
