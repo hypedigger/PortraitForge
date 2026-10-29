@@ -617,6 +617,11 @@ class Handler(BaseHTTPRequestHandler):
                         "tagged": len(xs.load_portrait_tags())})
         elif p == "/api/queue":
             self._json(_queue_status())
+        elif p == "/api/export_progress":
+            # phase de l'export / restauration en cours (animation d'attente)
+            st = dict(xs.PROGRESS)
+            st["elapsed"] = (time.time() - st["started"]) if st.get("running") and st.get("started") else 0
+            self._json(st)
         elif p == "/api/health":
             # page sante : etat ComfyUI, VRAM, temps moyens, tailles des caches
             alive = xs.comfy_alive()
@@ -1034,12 +1039,22 @@ class Handler(BaseHTTPRequestHandler):
                     break
             self._json({"ok": True})
         elif p == "/api/remove_installed":
-            r = xs.remove_installed()
+            xs.progress_start("remove")
+            xs.progress(phase="remove")
+            try:
+                r = xs.remove_installed()
+            finally:
+                xs.progress_end()
             self._json({"ok": True, "removed": r["removed"],
                         "restored_backups": r["restored_backups"],
                         "pack_found": r["pack_found"], "mod": r.get("mod")})
         elif p == "/api/restore_originals":
-            r = xs.restore_originals()
+            xs.progress_start("restore")
+            xs.progress(phase="remove")
+            try:
+                r = xs.restore_originals()
+            finally:
+                xs.progress_end()
             self._json({"ok": True, "restored": r["restored"],
                         "pack_found": r["pack_found"], "mod": r.get("mod")})
         elif p == "/api/select_auto":
@@ -1430,15 +1445,19 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
         elif p == "/api/export":
             settings = load_settings()
-            if body.get("scope") == "style" and body.get("style"):
-                r = xs.export_style(body["style"])
-            else:
-                cfg = xs.load_styles()
-                hidden = set(settings.get("hidden_styles", []))
-                order = sorted(
-                    (k for k in cfg["styles"] if k not in hidden),
-                    key=lambda k: cfg["styles"][k]["label"].lower())
-                r = xs.export_final(order)
+            xs.progress_start("export")
+            try:
+                if body.get("scope") == "style" and body.get("style"):
+                    r = xs.export_style(body["style"])
+                else:
+                    cfg = xs.load_styles()
+                    hidden = set(settings.get("hidden_styles", []))
+                    order = sorted(
+                        (k for k in cfg["styles"] if k not in hidden),
+                        key=lambda k: cfg["styles"][k]["label"].lower())
+                    r = xs.export_final(order)
+            finally:
+                xs.progress_end()
             self._json({"ok": True, "count": len(r["exported"]),
                         "installed": r["installed"],
                         "backed_up": r["backed_up"],

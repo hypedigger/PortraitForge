@@ -271,6 +271,18 @@ table.matrix{border-collapse:collapse}
 .helptbl .hk{white-space:nowrap;color:#bdf;font-family:Consolas,monospace;font-weight:bold}
 #btnHelp{width:34px;font-weight:bold}
 #verpopbg{position:fixed;inset:0;background:#000a;z-index:69;display:none}
+/* voile d'attente de l'export (jeux a exporteur externe : reconstruction du mod) */
+#waitpop{position:fixed;inset:0;background:#000b;z-index:80;display:none;align-items:center;justify-content:center}
+.waitbox{background:#20242c;border:1px solid #5af;border-radius:14px;padding:26px 34px;min-width:380px;max-width:70vw;
+ text-align:center;box-shadow:0 8px 40px #000c}
+.waitspin{width:54px;height:54px;margin:0 auto 16px;border-radius:50%;border:5px solid #2f3a4a;border-top-color:#8fd;
+ animation:genspin 1s linear infinite}
+.waitTitle{font-size:16px;color:#bdf;font-weight:bold;margin-bottom:6px}
+.waitPhase{font-size:13px;color:#8fd;min-height:18px}
+.waitLine{font-size:11px;color:#9ab;font-family:Consolas,monospace;margin-top:8px;min-height:16px;white-space:nowrap;
+ overflow:hidden;text-overflow:ellipsis}
+.waitTime{font-size:12px;color:#9ab;margin-top:10px}
+.waitHint{font-size:11px;color:#778;margin-top:10px;font-style:italic}
 #verpop{position:fixed;inset:4% 2.5%;z-index:70;background:#20242c;border:1px solid #5af;border-radius:12px;
  display:none;overflow:auto;padding:16px}
 #verpop h3{margin:0 0 12px;font-size:15px;color:#bdf}

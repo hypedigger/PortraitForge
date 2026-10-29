@@ -965,19 +965,45 @@ def effective_choice(style_key, stem, selections=None):
     return None
 
 
+# ------------------------------------------------- suivi de l'export en cours
+# Lu par /api/export_progress pendant qu'un export, une restauration ou un
+# retrait tourne (l'interface affiche la phase, la derniere ligne du toolkit
+# et le temps ecoule). Un seul export a la fois : simple dict de module.
+import time as _time
+PROGRESS = {"running": False}
+
+
+def progress(**kw):
+    PROGRESS.update(kw)
+
+
+def progress_start(what):
+    PROGRESS.clear()
+    PROGRESS.update(running=True, what=what, phase="images", done=0, total=0,
+                    line="", started=_time.time())
+    if EXPORTER is not None:
+        EXPORTER.progress = progress
+
+
+def progress_end():
+    PROGRESS.update(running=False, phase="done")
+
+
 def _export_items(items, resize_to_original=None, install_to_pack=True,
                   pack_dir=None):
     """items = [(portrait, style_key, fname)] -> _selected/ + pack (avec backup)."""
     ext = EXPORTER if install_to_pack else None
     if ext is not None:
         resize_to_original = True  # le toolkit exige la taille exacte de la texture
+        ext.progress = progress
     if resize_to_original is None:
         resize_to_original = bool(load_app_settings().get("resize_export", True))
     pack = pack_dir or PACK_DIR
     os.makedirs(EXPORT_DIR, exist_ok=True)
     exported, installed, backed_up = [], 0, 0
     pack_ok = install_to_pack and ext is None and os.path.isdir(pack)
-    for p, style_key, fname in items:
+    for i, (p, style_key, fname) in enumerate(items):
+        progress(phase="images", done=i, total=len(items), line=p["name"])
         if style_key is None:
             src = p["path"]  # texture originale conservee volontairement
         else:

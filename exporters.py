@@ -44,6 +44,7 @@ class CpkModExporter:
                     for k, v in cfg.items()}
         self._sources = None
         self._dups = None
+        self.progress = lambda **kw: None  # rappel de progression (phase=, line=) pose par xenostyle
 
     @property
     def label(self):
@@ -131,7 +132,8 @@ class CpkModExporter:
         marker = first + ".mesh.json"
         if os.path.exists(mod):
             os.makedirs(os.path.dirname(first), exist_ok=True)
-            ok, err, out = self._run([os.path.join(tk, "fmd.py"), "split", src["render"], mod, exp, first], 1800)
+            self.progress(phase="split", line=os.path.basename(src["png"]))
+            ok, err, out = self._run([os.path.join(tk, "fmd.py"), "split", src["render"], mod, exp, first], 1800, "split")
             log.append("%s : %s" % (os.path.basename(src["png"]), out.splitlines()[-1] if out else err))
             if not ok:
                 return False, "fmd.py split %s" % err, out
@@ -253,14 +255,25 @@ class CpkModExporter:
                 n += 1
         return n
 
-    def _run(self, args, timeout):
+    def _run(self, args, timeout, phase=""):
+        """Lance un script du toolkit ; chaque ligne de sortie est relayee au suivi de progression."""
         try:
-            r = subprocess.run([sys.executable] + args, capture_output=True, text=True, encoding="utf-8",
-                               errors="replace", cwd=self.cfg["toolkit_dir"], timeout=timeout)
-        except (OSError, subprocess.TimeoutExpired) as e:
+            proc = subprocess.Popen([sys.executable, "-u"] + args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    text=True, encoding="utf-8", errors="replace", cwd=self.cfg["toolkit_dir"])
+        except OSError as e:
             return False, str(e), ""
-        out = (r.stdout or "") + (r.stderr or "")
-        return r.returncode == 0, "" if r.returncode == 0 else "code %d" % r.returncode, "\n".join(out.strip().splitlines()[-12:])
+        lines = []
+        try:
+            for line in proc.stdout:
+                line = line.rstrip()
+                if line:
+                    lines.append(line)
+                    self.progress(phase=phase, line=line)
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            return False, "delai depasse", "\n".join(lines[-12:])
+        return code == 0, "" if code == 0 else "code %d" % code, "\n".join(lines[-12:])
 
     def rebuild(self):
         """Redecoupe les poses modifiees dans les atlas, puis reconstruit le mod avec import_mod.py."""
@@ -271,7 +284,8 @@ class CpkModExporter:
             atlas_out = self._dst(atlas_rel)
             has_mod = any(os.path.exists(self._pose_mod_path(s)) for s in srcs)
             if has_mod:
-                ok, err, out = self._run([os.path.join(tk, "restyle_chain.py"), "split", mbs, atlas_in, selection, pose_dir, atlas_out], 3600)
+                self.progress(phase="split", line=os.path.basename(atlas_rel))
+                ok, err, out = self._run([os.path.join(tk, "restyle_chain.py"), "split", mbs, atlas_in, selection, pose_dir, atlas_out], 3600, "split")
                 log.append("%s : %s" % (os.path.basename(atlas_rel), out.splitlines()[-1] if out else err))
                 if not ok:
                     return {"ok": False, "error": "restyle_chain.py %s" % err, "output": "\n".join(log + [out])}
@@ -290,7 +304,8 @@ class CpkModExporter:
                self.cfg["load_dir"], self.cfg["mod_name"]]
         if self.cfg.get("texconv"):
             cmd += ["--texconv", self.cfg["texconv"]]
-        ok, err, out = self._run(cmd, 3600)
+        self.progress(phase="mod", line="")
+        ok, err, out = self._run(cmd, 3600, "mod")
         return {"ok": ok, "error": "" if ok else "import_mod.py a renvoye %s" % err, "output": "\n".join(log + [out])}
 
 

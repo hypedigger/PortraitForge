@@ -70,8 +70,9 @@ game in `games.json` (edit the file by hand, the 🎮 dialog only knows flat pac
 With a `cpk_mod` exporter, *Exporter* and *Restaurer les portraits d'origine* no longer copy files into a
 pack folder: each chosen image is resized to its texture's exact size, dropped into the toolkit's `import/`
 folder at the path recorded for that texture, and the toolkit's `import_mod.py` rebuilds the game archive as a
-LayeredFS mod (Eden / Ryujinx / Atmosphère). The rebuild can take a few minutes; its last lines are shown in
-the browser console if it fails. Textures that the game stores several times (language archives) are all
+LayeredFS mod (Eden / Ryujinx / Atmosphère). The rebuild can take a few minutes: a waiting overlay shows the
+current phase (images, poses split back into the textures, mod rebuild), the toolkit's last output line and
+the elapsed time (`/api/export_progress`); the last lines are shown in the browser console if it fails. Textures that the game stores several times (language archives) are all
 updated at once. The destination of such a game is the mod folder (`<load_dir>\<title id>\<mod_name>\romfs`):
 it is shown on the game card and in *Options → Chemins*, where the emulator's `load` folder and the mod name
 can be changed (an already built mod is moved along); *📂 Pack* opens it.

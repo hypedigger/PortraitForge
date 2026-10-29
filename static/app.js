@@ -1354,7 +1354,11 @@ function optClose(){document.getElementById('optpop').style.display='none';}
 /* retire du jeu toutes les textures installees par l'app */
 async function removeInstalled(){
   if(!confirm(T('Retirer du jeu TOUTES les textures installées par l\'app ?\nLe jeu retrouve ses textures natives (les backups du pack sont remis en place).\nTu peux les réinstaller à tout moment avec Exporter.'))) return;
-  const r=await (await fetch('/api/remove_installed',{method:'POST',body:'{}'})).json();
+  waitShow('Retrait des textures du jeu…');
+  let r;
+  try{ r=await (await fetch('/api/remove_installed',{method:'POST',body:'{}'})).json(); }
+  catch(e){ waitHide(); toast('❌ Erreur pendant le retrait'); return; }
+  waitHide();
   if(!r.pack_found){toast(T('Répertoire du pack introuvable — vérifie le chemin dans les options'));return;}
   let msg='🗑 '+r.removed+' textures retirées du jeu';
   if(r.restored_backups) msg+=' ('+r.restored_backups+' backups du pack remis en place)';
@@ -1486,7 +1490,11 @@ function applyThumbSize(){
   document.documentElement.style.setProperty('--mcell',m+'px');
 }
 async function restoreOriginals(){
-  const r=await (await fetch('/api/restore_originals',{method:'POST'})).json();
+  waitShow('Restauration des originaux…');
+  let r;
+  try{ r=await (await fetch('/api/restore_originals',{method:'POST'})).json(); }
+  catch(e){ waitHide(); toast('❌ Erreur pendant la restauration'); return; }
+  waitHide();
   alert(T(r.mod?(r.restored+' portraits d\'origine restaurés dans le mod'+(r.mod.ok?', mod reconstruit':' — ❌ reconstruction du mod échouée')):r.pack_found?(r.restored+' portraits d\'origine restaurés dans le pack'):'Répertoire du pack introuvable — vérifie le chemin dans les options'));
 }
 document.addEventListener('click',e=>{
@@ -2041,6 +2049,43 @@ function showExportReport(missing){
   vp.innerHTML=h; vp.style.display='block'; vp.scrollTop=0;
   document.getElementById('verpopbg').style.display='block';
 }
+/* ---------- voile d'attente pendant l'export / la reconstruction du mod ----------
+   Affiche un spinner, la phase (images, redecoupage, mod), la derniere ligne du
+   toolkit et le temps ecoule, en interrogeant /api/export_progress chaque seconde.
+   Seulement pour les jeux a exporteur externe : l'export d'un pack plat est instantane. */
+let _waitTimer=null;
+const WAIT_PHASES={images:'Préparation des images',split:'Redécoupage des poses dans les textures',
+  mod:'Reconstruction du mod (copie des archives, encodage des textures)',remove:'Retrait des textures'};
+function fmtElapsed(s){
+  s=Math.floor(s);
+  return s<60?(s+' s'):(Math.floor(s/60)+' min '+String(s%60).padStart(2,'0')+' s');
+}
+function waitShow(title){
+  if(!(S.game&&S.game.exporter)) return;
+  const el=document.getElementById('waitpop');
+  document.getElementById('waitTitle').textContent=T(title);
+  document.getElementById('waitPhase').textContent='';
+  document.getElementById('waitLine').textContent='';
+  document.getElementById('waitTime').textContent='0 s';
+  el.style.display='flex';
+  const t0=Date.now();
+  const tick=async()=>{
+    document.getElementById('waitTime').textContent=fmtElapsed((Date.now()-t0)/1000);
+    try{
+      const p=await (await fetch('/api/export_progress')).json();
+      let s=WAIT_PHASES[p.phase]?T(WAIT_PHASES[p.phase]):'';
+      if(p.phase==='images'&&p.total) s+=' '+(p.done+1)+'/'+p.total;
+      document.getElementById('waitPhase').textContent=s;
+      document.getElementById('waitLine').textContent=p.line||'';
+    }catch(e){}
+  };
+  tick();
+  _waitTimer=setInterval(tick,1000);
+}
+function waitHide(){
+  if(_waitTimer){clearInterval(_waitTimer);_waitTimer=null;}
+  document.getElementById('waitpop').style.display='none';
+}
 async function exportSel(force){
   const btn=document.getElementById('btnExport');
   if(btn.disabled) return;
@@ -2053,6 +2098,7 @@ async function exportSel(force){
   }
   btn.disabled=true;btn.style.opacity='.55';
   lbl.textContent='⏳ Export en cours…';
+  waitShow(mode==='detail'?'Export du style en cours…':'Export en cours…');
   try{
     const body=(mode==='detail')?{scope:'style',style:style}:{scope:'final'};
     const r=await (await fetch('/api/export',{method:'POST',body:JSON.stringify(body)})).json();
@@ -2067,6 +2113,7 @@ async function exportSel(force){
   }catch(e){
     toast('❌ Erreur pendant l\'export');
   }
+  waitHide();
   btn.disabled=false;btn.style.opacity='';
   lbl.textContent=old;
 }

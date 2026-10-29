@@ -312,6 +312,15 @@ const PF_I18N_EN = {
   "est actif (et un filtre de sexe aussi).": "is active (and a sex filter too).",
   "Afficher tous les personnages": "Show all characters",
   "Exporter quand même": "Export anyway",
+  "Export en cours…": "Export in progress…",
+  "Export du style en cours…": "Style export in progress…",
+  "Restauration des originaux…": "Restoring originals…",
+  "Retrait des textures du jeu…": "Removing textures from the game…",
+  "Préparation des images": "Preparing images",
+  "Redécoupage des poses dans les textures": "Splitting poses back into the textures",
+  "Reconstruction du mod (copie des archives, encodage des textures)": "Rebuilding the mod (archive copy, texture encoding)",
+  "Retrait des textures": "Removing textures",
+  "La reconstruction du mod recopie l'archive du jeu (plusieurs Go) : compte quelques minutes.": "Rebuilding the mod copies the game archive (several GB): allow a few minutes.",
   "(clic sur un personnage : ouvrir toutes ses versions)": "(click a character: open all its versions)",
 
   /* ---- cadrage par image & suffixe par jeu ---- */
