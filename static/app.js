@@ -2846,8 +2846,6 @@ document.addEventListener('mouseover',e=>{
   if(t===_tipTarget) return;
   hideTip();
   if(!t) return;
-  /* jamais d'info-bulle dans les popups de reglages */
-  if(t.closest('#pop')||t.closest('#optpop')) return;
   _tipTarget=t;
   /* precharger date + mots de generation pendant le delai des 2 s */
   const ref=t.getAttribute('data-ref');
@@ -2888,5 +2886,29 @@ document.addEventListener('mouseout',e=>{
 });
 document.addEventListener('mousedown',hideTip,true);
 document.addEventListener('scroll',hideTip,true);
+
+/* ---------- title natif -> infobulle stylee ----------
+   les infobulles natives (title) apparaissent lentement et au bon vouloir du
+   navigateur : on transfere chaque title vers data-tip (affichage en 500 ms,
+   la ou les tips d'actions sur les images gardent leur delai de 2 s).
+   Exception : OPTION, dont le menu deroulant natif ne recoit pas nos survols. */
+function _titleToTip(root){
+  if(!root||root.nodeType!==1) return;
+  const els=root.querySelectorAll?[root,...root.querySelectorAll('[title]')]:[root];
+  for(const el of els){
+    const t=el.getAttribute&&el.getAttribute('title');
+    if(!t||el.tagName==='OPTION') continue;
+    el.setAttribute('data-tip',t); /* title re-assigne par le code : on remplace */
+    if(!el.hasAttribute('data-tipdelay')) el.setAttribute('data-tipdelay','500');
+    el.removeAttribute('title');
+  }
+}
+_titleToTip(document.body);
+new MutationObserver(muts=>{
+  for(const m of muts){
+    if(m.type==='childList'){for(const n of m.addedNodes) _titleToTip(n);}
+    else if(m.type==='attributes'&&m.target.getAttribute('title')) _titleToTip(m.target);
+  }
+}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['title']});
 
 load();
