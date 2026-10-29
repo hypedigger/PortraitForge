@@ -1,5 +1,5 @@
 let S=null, mode='matrix', style=null, popCtx=null;
-let todoOnly=false, curStem=null, hoverCell=null, sexFilter='';
+let todoOnly=false, genOnly=false, curStem=null, hoverCell=null, sexFilter='';
 function effSexOf(stem){return (S.meta[stem]&&S.meta[stem].sex)||'male';}
 function setSexFilter(v){
   sexFilter=v;
@@ -48,6 +48,8 @@ async function load(){
     for(const b of document.querySelectorAll('.sfb')) b.classList.toggle('on',b.dataset.v===sexFilter);
     todoOnly=!!ui.todoOnly;
     document.getElementById('todoChk').checked=todoOnly;
+    genOnly=!!ui.genOnly;
+    document.getElementById('genChk').checked=genOnly;
     if(ui.style&&colStyles().some(st=>st.key===ui.style)){
       style=ui.style;
       document.getElementById('styleSel').value=ui.style;
@@ -72,7 +74,7 @@ function saveUiState(){
     const mw=document.querySelector('.mwrap');
     localStorage.setItem('pf_ui',JSON.stringify({
       game:_uiGameKey(), mode:mode, style:style,
-      sexFilter:sexFilter, todoOnly:todoOnly,
+      sexFilter:sexFilter, todoOnly:todoOnly, genOnly:genOnly,
       y:window.scrollY, mx:mw?mw.scrollLeft:0, my:mw?mw.scrollTop:0}));
   }catch(e){}
 }
@@ -186,6 +188,10 @@ async function navStyle(d){
 function visiblePortraits(){
   let ps=S.portraits.filter(p=>!S.excluded.includes(p.stem));
   if(sexFilter) ps=ps.filter(p=>effSexOf(p.stem)===sexFilter);
+  /* "avec images" : au moins une image generee (style courant en vue detail) */
+  if(genOnly&&mode!=='tri'&&mode!=='prog')
+    ps=ps.filter(p=>(mode==='detail')?!!(S.variants[style+'/'+p.stem]||[]).length
+                                     :hasAnyVariant(p.stem));
   if(todoOnly&&mode==='detail') ps=ps.filter(p=>!S.selections[style+'/'+p.stem]);
   else if(todoOnly&&mode==='matrix')
     ps=ps.filter(p=>!visStyles().some(st=>S.selections[st.key+'/'+p.stem]));
@@ -194,13 +200,21 @@ function visiblePortraits(){
   else if(todoOnly&&mode==='mix') ps=ps.filter(p=>!finalChoice(p.stem));
   return ps;
 }
-/* message quand le filtre "a traiter" vide entierement la vue */
+/* le perso a-t-il au moins une image generee (tous styles + Custom) ? */
+function hasAnyVariant(stem){
+  for(const k in S.variants)
+    if(k.endsWith('/'+stem)&&(S.variants[k]||[]).length) return true;
+  return false;
+}
+/* message quand les filtres "a traiter" / "avec images" vident la vue */
 function todoEmptyHtml(){
+  const names=[todoOnly?'« à traiter »':'',genOnly?'« avec images »':''].filter(Boolean).join(' + ');
   return '<div class="hint" style="margin:40px auto;max-width:520px;text-align:center;font-size:15px;line-height:1.7">'+
-    '✅ <b>Rien à traiter</b> — le filtre <b>« à traiter »</b> est actif'+
-    (sexFilter?' (et un filtre de sexe aussi)':'')+',<br>et tous les personnages concernés sont déjà traités.'+
+    '✅ <b>Aucun personnage à afficher</b> — le filtre <b>'+names+'</b> est actif'+
+    (sexFilter?' (et un filtre de sexe aussi)':'')+'.'+
     '<br><button class="primary" style="margin-top:12px" '+
-    'onclick="document.getElementById(\'todoChk\').checked=false;todoOnly=false;render()">Afficher tous les personnages</button></div>';
+    'onclick="document.getElementById(\'todoChk\').checked=false;todoOnly=false;'+
+    'document.getElementById(\'genChk\').checked=false;genOnly=false;render()">Afficher tous les personnages</button></div>';
 }
 
 /* selection explicite uniquement (pas de defaut) */
@@ -279,6 +293,7 @@ function render(){
   document.getElementById('btnDelStyle').style.display=(mode==='detail')?'':'none';
   document.getElementById('genAllN').textContent=(S.settings&&S.settings.gen_all_count)||2;
   document.getElementById('todoWrap').style.display=(mode==='tri'||mode==='prog')?'none':'flex';
+  document.getElementById('genWrap').style.display=(mode==='tri'||mode==='prog')?'none':'flex';
   document.getElementById('subbar').style.display='flex'; /* filtre sexe dispo partout */
   document.getElementById('btnExport').style.display=(mode==='detail'||mode==='mix')?'':'none';
   document.getElementById('expLabel').textContent=(mode==='detail')?'Exporter ce style':'Exporter la sélection';
@@ -337,7 +352,7 @@ function measureMixSticky(){
 }
 function renderMatrix(){
   const c=document.getElementById('content');
-  if(todoOnly&&!visiblePortraits().length){c.innerHTML=todoEmptyHtml();return;}
+  if((todoOnly||genOnly)&&!visiblePortraits().length){c.innerHTML=todoEmptyHtml();return;}
   /* en Vue d'ensemble la colonne Custom est TOUJOURS presente : c'est le
      point d'entree de l'upload d'images perso */
   const cols=[{key:'_custom',label:'✨ Custom'}].concat(visStyles());
@@ -409,7 +424,7 @@ async function gotoDetail(st,stem){
 /* ---------- vue par style ---------- */
 function renderDetail(){
   const c=document.getElementById('content');
-  if(todoOnly&&!visiblePortraits().length){c.innerHTML=todoEmptyHtml();return;}
+  if((todoOnly||genOnly)&&!visiblePortraits().length){c.innerHTML=todoEmptyHtml();return;}
   const g=document.createElement('div');g.className='grid';
   const gh=document.createElement('div');gh.className='gridhead';
   gh.innerHTML='<div class="gh-left"></div><div class="gh-orig">original</div><div class="gh-var">variantes</div>';
@@ -1188,7 +1203,7 @@ function badgeClass(n){
 }
 function renderMix(){
   const c=document.getElementById('content');
-  if(todoOnly&&!visiblePortraits().length){c.innerHTML=todoEmptyHtml();return;}
+  if((todoOnly||genOnly)&&!visiblePortraits().length){c.innerHTML=todoEmptyHtml();return;}
   /* stats : artistes les plus presents dans les choix globaux */
   const counts={};
   let totalSel=0;

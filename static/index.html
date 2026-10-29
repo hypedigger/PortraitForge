@@ -27,6 +27,7 @@
   <button class="sfb o" data-v="other" onclick="setSexFilter('other')">✎</button>
  </span>
  <label id="todoWrap" title="n'afficher que les personnages sans sélection"><input type="checkbox" id="todoChk" onchange="todoOnly=this.checked;render()"> à traiter</label>
+ <label id="genWrap" title="n'afficher que les personnages ayant au moins une image générée (dans le style courant en vue Par style)"><input type="checkbox" id="genChk" onchange="genOnly=this.checked;render()"> avec images</label>
  <button class="primary" id="btnExport" onclick="exportSel()"><span id="expLabel">Exporter</span> <span class="badge" id="selCount">0</span></button>
  <button id="btnDelUnsel" class="dangerbtn" onclick="deleteStyleImages(true)" title="supprime les images non sélectionnées de ce style (avec confirmation)">🗑 Non sélectionnées</button>
  <button id="btnDelStyle" class="dangerbtn" onclick="deleteStyleImages(false)" title="supprime TOUTES les images générées de ce style — les originaux sont conservés (avec confirmation)">🗑 Tout le style</button>
