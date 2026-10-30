@@ -97,7 +97,6 @@ button.primary:hover{background:#28884e}
 #dnexpl{font-size:12px;min-height:44px;color:#cde;background:#181c22;border-radius:8px;padding:8px;margin:8px 0}
 .qty{display:flex;align-items:center;gap:8px;margin:6px 0}
 .qty input{width:60px;text-align:center}
-.qstep{min-width:32px;padding:6px 0;font-weight:bold;text-align:center}
 #pop .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
 /* Selection globale : etat "aucun envoi" (perso saute a l'export) */
 .mempty.mnone{color:#e66;font-size:19px;border-color:#a44}

@@ -332,10 +332,8 @@
 
 <div id="pop">
  <h3 id="popTitle">Régénérer</h3>
- <div class="qty"><label title="nombre d'images générées (mises en file d'attente) à chaque clic sur un bouton Générer">Quantité :</label>
-  <button class="qstep" onclick="stepPopQty(-1)" title="diminuer le nombre d'images à générer (paliers : 1, 2, 3, 5, 10, 15, 25, 50, 100)">−</button>
-  <input id="popQty" type="number" min="1" max="200" value="5" title="nombre d'images à générer — saisie libre de 1 à 200">
-  <button class="qstep" onclick="stepPopQty(1)" title="augmenter le nombre d'images à générer (paliers : 1, 2, 3, 5, 10, 15, 25, 50, 100)">+</button>
+ <div class="qty"><label>Quantité :</label>
+  <select id="popQty"><option>1</option><option>3</option><option selected>5</option><option>10</option><option>25</option><option>50</option></select>
  </div>
  <div id="popStyleParams">
  <div style="margin:6px 0"><label>Base : <b id="popBase" style="color:#8fd"></b> — Checkpoint :</label>
