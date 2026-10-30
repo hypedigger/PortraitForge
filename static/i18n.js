@@ -205,6 +205,9 @@ const PF_I18N_EN = {
   "🚫 Aucun envoi pour ce personnage (choix explicite)": "🚫 Nothing exported for this character (explicit choice)",
   "aucun envoi (choix explicite)": "nothing exported (explicit choice)",
   "📋 Prompt complet de cette image ⓘ": "📋 Full prompt of this image ⓘ",
+  "les mots": "the",
+  "surlignés": "highlighted",
+  "sont propres à cette image (tags du perso, cadrage, mots ajoutés) — repris dans le champ positif ci-dessus": "words are specific to this image (character tags, framing, added words) — pre-filled in the positive field above",
   "prompts positif et négatif EXACTS utilisés pour générer cette image (lus dans ses métadonnées PNG). Lecture seule : les tags auto, le cadrage et les mots du personnage sont réinjectés automatiquement à chaque génération — les recopier dans les zones ci-dessus les ferait apparaître en double":
     "the EXACT positive and negative prompts used to generate this image (read from its PNG metadata). Read-only: auto tags, framing and character words are re-injected automatically on every generation — copying them into the fields above would duplicate them",
   "positif": "positive",

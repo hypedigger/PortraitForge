@@ -942,7 +942,8 @@ function showPop(ev,st,stem,kind){
   popCtx={style:st,stem:stem,kind:kind};
   const s=S.settings||{};
   const qty={custom:s.custom_count||5,missing:s.regen_count||2,all:s.gen_all_count||2,perso:s.regen_count||2}[kind];
-  document.getElementById('popQty').value=qty;
+  setPopQty(qty);
+  delete document.getElementById('popPos').dataset.noauto; /* tags auto par defaut */
   document.getElementById('popSeedRow').style.display=(kind==='custom')?'':'none';
   document.getElementById('popSeed').value='';
   document.getElementById('popSeedReuseWrap').style.display='none';
@@ -968,7 +969,7 @@ function showPop(ev,st,stem,kind){
   pop.style.display='block';
   const r=ev.target.getBoundingClientRect();
   const vw=document.documentElement.clientWidth, vh=document.documentElement.clientHeight;
-  pop.style.left=Math.max(8,Math.min(vw-350,r.left))+'px';
+  pop.style.left=Math.max(8,Math.min(vw-pop.offsetWidth-10,r.left))+'px';
   /* caler pour que le panneau tienne entierement dans l'ecran */
   const ph=pop.offsetHeight;
   pop.style.top=Math.max(8,Math.min(vh-ph-10,r.bottom+8))+'px';
@@ -1019,6 +1020,7 @@ function applyUserPreset(name){
   if(p.cnet_end!=null) document.getElementById('popCend').value=p.cnet_end;
   document.getElementById('popPos').value=p.pos||'';
   document.getElementById('popNeg').value=p.neg||'';
+  delete document.getElementById('popPos').dataset.noauto; /* mots de preset = extras */
   /* application ponctuelle : ne pas memoriser dans le style par accident */
   document.getElementById('popMemo').checked=false;
 }
@@ -1112,7 +1114,17 @@ function popPreset(kind){
   }
   dnExplain();
 }
-function qty(d){const i=document.getElementById('popQty');i.value=Math.max(1,Math.min(10,(+i.value)+d));}
+/* selecteur de quantite (1/3/5/10/25/50) : si la valeur demandee n'est pas
+   dans la liste (ex: reglage "2 par defaut"), on l'ajoute a sa place */
+function setPopQty(n){
+  const sel=document.getElementById('popQty');
+  n=Math.max(1,+n||1);
+  if(![...sel.options].some(o=>+o.value===n)){
+    const o=document.createElement('option');o.value=o.textContent=n;
+    sel.insertBefore(o,[...sel.options].find(x=>+x.value>n)||null);
+  }
+  sel.value=n;
+}
 function dnExplain(){
   const v=+document.getElementById('popDn').value;
   document.getElementById('dnval').textContent=v.toFixed(2);
@@ -1172,6 +1184,9 @@ async function launchRegen(front){
   else{
     body.stem=popCtx.stem;
     body.front=!!front;
+    /* champ positif pre-rempli avec les tags de l'image : ne pas les
+       reinjecter automatiquement en plus (ce que contient le champ fait foi) */
+    body.no_auto_tags=document.getElementById('popPos').dataset.noauto==='1';
     const sd=document.getElementById('popSeed').value;
     if(sd!=='') body.seed=+sd;
   }
@@ -2600,14 +2615,29 @@ function popApplyGenParams(gp){
     document.getElementById('popSeedReuseWrap').style.display='';
     document.getElementById('popSeedReuse').checked=false;
   }
-  /* mots ajoutes aux prompts lors de la generation de cette image */
-  document.getElementById('popPos').value=gp.pos_extra||'';
+  /* decoupage du prompt : les mots hors prompt de base du style sont ceux
+     propres a l'image (tags du perso, cadrage, mots ajoutes au popup) */
+  const _tokSet=s=>new Set((s||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean));
+  const _toks=s=>(s||'').split(',').map(x=>x.trim()).filter(Boolean);
+  const bp=_tokSet(gp.base_pos);
+  /* champ positif : pre-rempli avec TOUS les mots propres a l'image ; le
+     drapeau noauto evite que les tags auto soient reinjectes en plus */
+  if(gp.base_pos&&gp.positive){
+    document.getElementById('popPos').value=
+      _toks(gp.positive).filter(t=>!bp.has(t.toLowerCase())).join(', ');
+    document.getElementById('popPos').dataset.noauto='1';
+  }else document.getElementById('popPos').value=gp.pos_extra||'';
   document.getElementById('popNeg').value=gp.neg_extra||'';
-  /* prompt complet de l'image (lecture seule, replie par defaut) : tous les
-     mots effectivement utilises — tags auto, cadrage, mots du perso, style */
+  /* prompt complet de l'image (lecture seule, replie par defaut) : mots
+     propres a l'image surlignes par rapport au prompt de base du style */
   if(gp.positive){
-    document.getElementById('popFullPos').textContent=gp.positive;
-    document.getElementById('popFullNeg').textContent=gp.negative||'';
+    const mark=(txt,bs)=>_toks(txt).map(t=>bs.has(t.toLowerCase())?_esc(t)
+      :'<span class="pfx">'+_esc(t)+'</span>').join(', ');
+    document.getElementById('popFullPos').innerHTML=
+      gp.base_pos?mark(gp.positive,bp):_esc(gp.positive);
+    document.getElementById('popFullNeg').innerHTML=
+      gp.base_neg?mark(gp.negative||'',_tokSet(gp.base_neg)):_esc(gp.negative||'');
+    document.getElementById('pfLegend').style.display=gp.base_pos?'':'none';
     document.getElementById('popFullSec').style.display='';
   }
   /* quantite : celle configuree (les seeds s'incrementent par exemplaire) */

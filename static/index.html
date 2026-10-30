@@ -333,7 +333,7 @@
 <div id="pop">
  <h3 id="popTitle">Régénérer</h3>
  <div class="qty"><label>Quantité :</label>
-  <button onclick="qty(-1)">−</button><input id="popQty" type="number" min="1" max="10" value="5"><button onclick="qty(1)">+</button>
+  <select id="popQty"><option>1</option><option>3</option><option selected>5</option><option>10</option><option>25</option><option>50</option></select>
  </div>
  <div id="popStyleParams">
  <div style="margin:6px 0"><label>Base : <b id="popBase" style="color:#8fd"></b> — Checkpoint :</label>
@@ -369,6 +369,7 @@
  <div id="popFullSec" style="display:none;border-top:1px dashed #39404f;margin-top:8px;padding-top:6px">
   <label style="cursor:pointer" onclick="popFullToggle()" title="prompts positif et négatif EXACTS utilisés pour générer cette image (lus dans ses métadonnées PNG). Lecture seule : les tags auto, le cadrage et les mots du personnage sont réinjectés automatiquement à chaque génération — les recopier dans les zones ci-dessus les ferait apparaître en double"><span id="popFullArrow">▸</span> 📋 Prompt complet de cette image ⓘ</label>
   <div id="popFullBody" style="display:none">
+   <div class="pflegend" id="pfLegend">les mots <span class="pfx">surlignés</span> sont propres à cette image (tags du perso, cadrage, mots ajoutés) — repris dans le champ positif ci-dessus</div>
    <div class="pfrow"><span style="color:#8fd">positif</span><button onclick="popFullCopy('popFullPos')" title="copier le prompt positif">📋 copier</button></div>
    <div id="popFullPos" class="popfull"></div>
    <div class="pfrow"><span style="color:#f99">négatif</span><button onclick="popFullCopy('popFullNeg')" title="copier le prompt négatif">📋 copier</button></div>

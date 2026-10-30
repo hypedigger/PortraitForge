@@ -604,10 +604,27 @@ def save_png_with_params(img, path, cfgset, seed):
     img.save(path, pnginfo=meta)
 
 
+def _dedup_prompt(p):
+    """Retire les termes en double d'un prompt (tokens separes par des
+    virgules ; premiere occurrence conservee, casse ignoree). Evite le
+    double poids quand les tags auto sont aussi dans les mots du popup."""
+    seen, out = set(), []
+    for tok in p.split(","):
+        t = tok.strip()
+        if not t:
+            continue
+        k = t.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(t)
+    return ", ".join(out)
+
+
 def generate_variant(styles_cfg, style_key, portrait, seed=None, denoise=None,
                      pos_extra=None, neg_extra=None, boost=False,
                      lora_strength=None, cnet_strength=None, cnet_end=None,
-                     checkpoint=None, lora_enabled=True):
+                     checkpoint=None, lora_enabled=True, auto_tags=True):
     """Genere une variante stylisee d'un portrait. Retourne le chemin du PNG."""
     if seed is None:
         seed = random.randint(0, 2**31 - 1)
@@ -640,7 +657,9 @@ def generate_variant(styles_cfg, style_key, portrait, seed=None, denoise=None,
     _apply_portrait_words(cfgset, portrait["stem"])
     pos_extra, neg_extra = portrait_prompt_tags(portrait["stem"])
     char_tags = ""
-    if app_s.get("use_auto_tags", True):
+    # auto_tags=False : les tags sont deja dans les mots du popup (regeneration
+    # pre-remplie) -> ce que l'utilisateur y laisse fait foi
+    if app_s.get("use_auto_tags", True) and auto_tags:
         char_tags = load_portrait_tags().get(portrait["stem"], "")
     if char_tags:
         pos_extra = (pos_extra + ", " + char_tags) if pos_extra else char_tags
@@ -648,6 +667,8 @@ def generate_variant(styles_cfg, style_key, portrait, seed=None, denoise=None,
         cfgset["positive"] = pos_extra + ", " + cfgset["positive"]
     if neg_extra:
         cfgset["negative"] = cfgset["negative"] + ", " + neg_extra
+    cfgset["positive"] = _dedup_prompt(cfgset["positive"])
+    cfgset["negative"] = _dedup_prompt(cfgset["negative"])
     rgb, alpha = prepare_input(portrait["path"], cfgset["size"])
     cfgset["width"], cfgset["height"] = rgb.size
     up_name = upload_image(rgb, "xenostyle_%s.png" % portrait["stem"])
@@ -725,6 +746,8 @@ def generate_custom(portrait, opts):
         cfgset["positive"] = pos_extra + ", " + cfgset["positive"]
     if neg_extra:
         cfgset["negative"] += ", " + neg_extra
+    cfgset["positive"] = _dedup_prompt(cfgset["positive"])
+    cfgset["negative"] = _dedup_prompt(cfgset["negative"])
     # source de l'img2img
     src = opts.get("source")
     src_path = portrait["path"]

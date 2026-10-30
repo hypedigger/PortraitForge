@@ -415,7 +415,8 @@ def _worker():
                                     cnet_strength=job.get("cnet_strength"),
                                     cnet_end=job.get("cnet_end"),
                                     checkpoint=job.get("checkpoint"),
-                                    lora_enabled=job.get("lora_enabled", True))
+                                    lora_enabled=job.get("lora_enabled", True),
+                                    auto_tags=job.get("auto_tags", True))
             _durations.append(time.time() - _job_t0)
             del _durations[:-10]
             # temps moyens par style (page sante)
@@ -794,16 +795,20 @@ class Handler(BaseHTTPRequestHandler):
                     st = cfg["styles"].get(style_key)
                     if st and out.get("positive"):
                         sfx = cfg["defaults"]["suffix"]
+                        base_px = cfg["defaults"][st["base"]]["prefix"] + st["prompt"]
+                        out["base_pos"] = base_px + sfx
                         for cand in {sfx,
                                      sfx.replace("looking ahead", "looking at viewer"),
                                      sfx.replace("looking at viewer", "looking ahead")}:
                             i = out["positive"].rfind(cand)
                             if i >= 0:
                                 out["pos_extra"] = out["positive"][i + len(cand):].strip(" ,")
+                                out["base_pos"] = base_px + cand
                                 break
                     if st and out.get("negative"):
                         base_neg = cfg["defaults"][st["base"]]["negative"] \
                             + st.get("negative_extra", "")
+                        out["base_neg"] = base_neg
                         neg = out["negative"]
                         if neg.startswith(base_neg):
                             mid = neg[len(base_neg):].strip(" ,")
@@ -871,9 +876,10 @@ class Handler(BaseHTTPRequestHandler):
             xs.save_selections(sel)
             self._json({"ok": True})
         elif p == "/api/regen":
-            n = max(1, min(10, int(body.get("count", 1))))
+            n = max(1, min(50, int(body.get("count", 1))))
             job = {"style": body["style"], "stem": body["stem"],
                    "denoise": body.get("denoise"),
+                   "auto_tags": not body.get("no_auto_tags"),
                    "pos": body.get("pos"), "neg": body.get("neg"),
                    "lora_strength": body.get("lora_strength"),
                    "cnet_strength": body.get("cnet_strength"),

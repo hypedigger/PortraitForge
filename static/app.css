@@ -83,8 +83,10 @@ button.primary:hover{background:#28884e}
 .delrow:hover{background:#a33}
 #pop textarea{width:100%;box-sizing:border-box;background:#181c22;border:1px solid #444;border-radius:6px;color:#ddd;padding:9px;font-size:13px;font-family:inherit;resize:vertical;min-height:58px}
 #pop{position:fixed;z-index:130;background:#20242c;border:1px solid #5af;border-radius:12px;padding:14px 16px;
- width:330px;box-shadow:0 8px 30px #000c;display:none;max-height:calc(100vh - 24px);overflow:auto;
+ width:500px;box-shadow:0 8px 30px #000c;display:none;max-height:calc(100vh - 24px);overflow:auto;
  resize:both;min-width:330px;min-height:280px;max-width:96vw}
+/* poignee de redimensionnement visible (coin bas-droit, comme une fenetre) */
+#pop::-webkit-resizer{background:linear-gradient(135deg,transparent 0 50%,#5af 50% 60%,transparent 60% 70%,#5af 70% 80%,transparent 80%);border-radius:0 0 10px 0}
 #pop h3{margin:0 0 10px;font-size:14px;color:#bdf;cursor:move;user-select:none}
 #pop input[type=number],#pop input[type=text]{padding:8px 10px;font-size:14px;box-sizing:border-box}
 #pop .qty input{width:76px}
@@ -104,6 +106,8 @@ button.primary:hover{background:#28884e}
  padding:7px 8px;margin:3px 0;user-select:text;word-break:break-word;max-height:150px;overflow:auto}
 .pfrow{display:flex;align-items:center;justify-content:space-between;font-size:12px;margin-top:5px}
 .pfrow button{padding:2px 8px;font-size:11px}
+.pfx{color:#ffd27f} /* mots propres a l'image (hors prompt de base du style) */
+.pflegend{font-size:11px;color:#9ab;margin:2px 0 4px}
 
 /* ---- matrice ---- */
 .mwrap{overflow:auto;padding:0;max-height:calc(100vh - var(--headh,60px) - 20px);box-sizing:border-box}
