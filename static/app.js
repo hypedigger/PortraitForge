@@ -1114,16 +1114,17 @@ function popPreset(kind){
   }
   dnExplain();
 }
-/* selecteur de quantite (1/3/5/10/25/50) : si la valeur demandee n'est pas
-   dans la liste (ex: reglage "2 par defaut"), on l'ajoute a sa place */
+/* quantite : champ numerique libre (1-200) + boutons - / + qui parcourent
+   des paliers utiles au lieu d'incrementer de 1 */
+const QTY_LADDER=[1,2,3,5,10,15,25,50,100,200];
 function setPopQty(n){
-  const sel=document.getElementById('popQty');
-  n=Math.max(1,+n||1);
-  if(![...sel.options].some(o=>+o.value===n)){
-    const o=document.createElement('option');o.value=o.textContent=n;
-    sel.insertBefore(o,[...sel.options].find(x=>+x.value>n)||null);
-  }
-  sel.value=n;
+  document.getElementById('popQty').value=Math.min(200,Math.max(1,+n||1));
+}
+function stepPopQty(d){
+  const inp=document.getElementById('popQty');
+  const v=Math.max(1,+inp.value||1);
+  inp.value=(d>0)?(QTY_LADDER.find(x=>x>v)||200)
+                 :([...QTY_LADDER].reverse().find(x=>x<v)||1);
 }
 function dnExplain(){
   const v=+document.getElementById('popDn').value;
