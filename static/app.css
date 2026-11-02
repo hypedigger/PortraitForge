@@ -1,17 +1,23 @@
-:root{--bg:#1b1e24;--panel:#22262e;--panel2:#2a2f3a;--txt:#ddd;--dim:#9ab;--acc:#4c4;--accg:#6e6}
+:root{--bg:#1b1e24;--panel:#22262e;--panel2:#2a2f3a;--txt:#ddd;--dim:#9ab;--acc:#4c4;--accg:#6e6;
+ --a1:#6366f1;--a2:#22d3ee} /* accents modernes indigo / cyan */
 body{font-family:Segoe UI,sans-serif;margin:0;background:var(--bg);color:var(--txt)}
-header{position:sticky;top:0;background:#12141a;padding:8px 16px;display:flex;gap:10px;align-items:center;z-index:20;flex-wrap:wrap;box-shadow:0 2px 8px #0008}
-h1{font-size:15px;margin:0 8px 0 0;color:#8fd;white-space:nowrap}
-select,button,input[type=number]{background:var(--panel2);color:var(--txt);border:1px solid #444;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px}
-button:hover{background:#39404f}
-button.primary{background:#2c5;border-color:#2c5;color:#082}
-button.primary{background:#1f6f3f;border-color:#2c8f57;color:#dfd}
-button.primary:hover{background:#28884e}
+header{position:sticky;top:0;background:linear-gradient(180deg,#151827,#101320);padding:8px 16px;display:flex;gap:10px;align-items:center;z-index:20;flex-wrap:wrap;box-shadow:0 2px 12px #000a;border-bottom:1px solid #2b3350}
+h1{font-size:16px;margin:0 8px 0 0;white-space:nowrap;font-weight:700;
+ background:linear-gradient(90deg,#7dd3fc,#a78bfa,#f0abfc);-webkit-background-clip:text;background-clip:text;color:transparent}
+select,button,input[type=number]{background:var(--panel2);color:var(--txt);border:1px solid #444;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px}
+button:hover{background:#39404f;border-color:#5a6a8a}
+button.primary{background:linear-gradient(135deg,#059669,#0d9488);border-color:#10b98188;color:#eafff5}
+button.primary:hover{background:linear-gradient(135deg,#10b981,#14b8a6);box-shadow:0 2px 10px #10b98144}
+#btnGame{border-color:#7c5cff55;color:#cdbfff;background:#252138}
+#btnGame:hover{border-color:#7c5cff;background:#2d2847}
+#btnOpt{border-color:#38bdf855;color:#9adbff}
+#btnOpt:hover{border-color:#38bdf8;background:#1b2a3a}
 #status{font-size:12px;color:var(--dim);margin-left:auto}
 #btnOpt{white-space:nowrap}
 #prog{font-size:12px;color:#8fd}
 #todoWrap{font-size:13px;color:var(--dim);display:flex;align-items:center;gap:4px;cursor:pointer}
-#subbar{flex-basis:100%;display:flex;gap:10px;align-items:center;padding-top:6px;border-top:1px solid #23262e;margin-top:4px;flex-wrap:wrap}
+#subbar{flex-basis:100%;display:flex;gap:10px;align-items:center;padding-top:6px;margin-top:4px;flex-wrap:wrap;
+ border-top:1px solid;border-image:linear-gradient(90deg,#4f46e566,#22d3ee44,transparent) 1}
 #tabHint{font-size:12px;color:#9ab;font-style:italic}
 #sexFilterWrap{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:3px}
 .sfb{padding:4px 9px;font-size:12px;border-radius:6px;opacity:.5;border:1px solid #444;background:var(--panel2)}
@@ -24,12 +30,13 @@ button.primary:hover{background:#28884e}
 .navst{padding:6px 9px;font-size:12px}
 .selfilter{background:#181c22;border:1px solid #444;border-radius:6px;color:#ddd;padding:5px 8px;font-size:12px;width:95px}
 .row.cur{outline:2px solid #5af8}
-.tabs{display:flex;gap:4px}
-.tabs button{border-radius:8px 8px 0 0;border-bottom:none;opacity:.6}
-.tabs button.on{opacity:1;background:#39404f;border-color:#5af;color:#bdf}
+.tabs{display:flex;gap:5px}
+.tabs button{border-radius:999px;border:1px solid #39404f;opacity:.8;padding:6px 14px;transition:all .12s}
+.tabs button:hover{opacity:1;border-color:var(--a1);color:#cdd6ff;background:#262b3d}
+.tabs button.on{opacity:1;color:#fff;background:linear-gradient(135deg,#4f46e5,#0e7490);border-color:transparent;box-shadow:0 2px 10px #4f46e566}
 .busyDot{display:inline-block;animation:pfpulse 1.2s ease-in-out infinite}
 @keyframes pfpulse{50%{opacity:.25}}
-.badge{background:var(--acc);color:#111;border-radius:9px;padding:1px 8px;font-size:12px}
+.badge{background:linear-gradient(135deg,#34d399,#22d3ee);color:#063226;border-radius:9px;padding:1px 8px;font-size:12px;font-weight:600}
 
 /* fond neutre pour la transparence (leger = rendu fluide) */
 .thumb{background:#3a3f48;border-radius:8px}
