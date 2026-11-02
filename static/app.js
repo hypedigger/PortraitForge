@@ -1980,7 +1980,9 @@ function renderTriQual(){
     '<span class="qcolsw">Images par ligne :'+
     [1,2,3].map(n=>'<button class="'+(cols===n?'on':'')+'" onclick="qualCols('+n+')">'+n+'</button>').join('')+
     '</span></div>';
-  h+='<div class="qualgrid" style="grid-template-columns:repeat('+cols+',1fr)">';
+  /* les cartes gardent TOUJOURS la largeur du mode 3 colonnes (1/3 de la
+     page) ; en 1 ou 2 colonnes l'espace restant est laisse libre a droite */
+  h+='<div class="qualgrid" style="grid-template-columns:repeat('+cols+',calc((100% - 20px)/3));justify-content:start">';
   for(const p of visiblePortraits()){
     const m=S.meta[p.stem]||{};
     const sx=m.sex||'male';
