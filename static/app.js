@@ -2368,11 +2368,14 @@ function lbShow(full){
     if(D&&D.getAttribute('data-ref')===lbi.getAttribute('data-ref'))
       D.setAttribute('data-tip','consultée — '+base+' — '+res);
   };
-  const nav=lbCtx&&lbCtx.files.length>1;
+  const wallNav=!!(lbCtx&&lbCtx.wall&&lbCtx.wall.refs.length>1);
+  const nav=wallNav||(lbCtx&&lbCtx.files.length>1);
   document.getElementById('lbPrev').style.display=nav?'':'none';
   document.getElementById('lbNext').style.display=nav?'':'none';
   document.getElementById('lbCount').style.display=lbCtx?'':'none';
-  document.getElementById('lbCount').textContent=lbCtx?((lbCtx.idx+1)+' / '+lbCtx.files.length):'';
+  document.getElementById('lbCount').textContent=
+    wallNav?((lbCtx.wall.i+1)+' / '+lbCtx.wall.refs.length)
+           :(lbCtx?((lbCtx.idx+1)+' / '+lbCtx.files.length):'');
   document.getElementById('lbDel').style.display=lbCtx?'':'none';
   const sb=document.getElementById('lbSel');
   sb.style.display=lbCtx?'':'none';
@@ -2449,6 +2452,19 @@ function lbShow(full){
   document.getElementById('lb').style.display='block';
 }
 function lbNav(d){
+  if(lbCtx&&lbCtx.wall&&lbCtx.wall.refs.length){
+    /* mode mur Generation : navigation sur toutes les images affichees */
+    const w=lbCtx.wall;
+    w.i=(w.i+d+w.refs.length)%w.refs.length;
+    const mm=w.refs[w.i].match(/^([^/]+)\/([^/]+)\/(.+)$/);
+    if(!mm) return;
+    const files=S.variants[mm[1]+'/'+mm[2]]||[];
+    lbCtx={style:mm[1],stem:mm[2],
+           files:files.length?files:[mm[3]],
+           idx:Math.max(0,files.indexOf(mm[3])),wall:w};
+    lbShow('/img/var/'+w.refs[w.i]);
+    return;
+  }
   if(!lbCtx||lbCtx.files.length<2) return;
   const n=lbCtx.files.length;
   lbCtx.idx=(lbCtx.idx+d+n)%n;
@@ -2749,7 +2765,20 @@ async function lbDelete(){
     if(!local.length) delete S.variants[key];
   }
   if(S.selections[key]===f) S.selections[key]=null;
-  if(lbCtx.files.length){
+  if(lbCtx.wall){
+    /* mode mur Generation : retirer l'image du mur et montrer la suivante */
+    const w=lbCtx.wall;
+    const wi=w.refs.indexOf(sk+'/'+stem+'/'+f);
+    if(wi>=0){
+      w.refs.splice(wi,1);
+      if(wi<w.i) w.i--;
+    }
+    _progWallKey=''; /* resynchroniser le mur derriere */
+    if(w.refs.length){
+      w.i=Math.min(w.i,w.refs.length-1);
+      lbNav(0);
+    }else lbClose();
+  }else if(lbCtx.files.length){
     lbCtx.idx=Math.min(idx,lbCtx.files.length-1);
     lbShow('/img/var/'+key+'/'+lbCtx.files[lbCtx.idx]);
   }else{
@@ -2770,6 +2799,13 @@ document.addEventListener('contextmenu',e=>{
   if(m){
     const files=S.variants[m[1]+'/'+m[2]]||[];
     if(files.length) lbCtx={style:m[1],stem:m[2],files:files,idx:Math.max(0,files.indexOf(m[3]))};
+    /* zoom depuis le mur Generation : fleches / molette = TOUT le mur,
+       dans l'ordre affiche (pas seulement les variantes du personnage) */
+    const wallEl=im.closest('#progWall');
+    if(wallEl&&lbCtx){
+      const refs=[...wallEl.children].map(c=>c.dataset.k).filter(Boolean);
+      lbCtx.wall={refs:refs,i:Math.max(0,refs.indexOf(m[1]+'/'+m[2]+'/'+m[3]))};
+    }
   }
   lbShow(full);
 });
@@ -2795,7 +2831,7 @@ document.addEventListener('keydown',e=>{
 
 /* molette dans le zoom : image precedente / suivante */
 document.getElementById('lb').addEventListener('wheel',e=>{
-  if(lbCtx&&lbCtx.files.length>1){
+  if(lbCtx&&(lbCtx.files.length>1||(lbCtx.wall&&lbCtx.wall.refs.length>1))){
     e.preventDefault();
     lbNav(e.deltaY>0?1:-1);
   }
@@ -2889,6 +2925,20 @@ function fmtAge(ts){
   const mo=Math.floor(d/30); if(mo<12) return 'il y a '+mo+' mois';
   const y=Math.floor(d/365); return 'il y a '+y+' an'+(y>1?'s':'');
 }
+/* mise en forme des infobulles : le nom/la description sur sa ligne, puis une
+   ligne vide, puis CHAQUE action (clic gauche / clic droit / re-clic...) sur
+   sa propre ligne (patterns FR et EN) */
+const _TIP_ACT='(?:clic |re-clic |glisser |molette|left click|right click|click again|drag |wheel)';
+function _fmtTipActions(d){
+  d=String(d)
+    .replace(new RegExp('\\s+—\\s+(?='+_TIP_ACT+')'),'\n\n')
+    .replace(new RegExp('\\s*·\\s*(?='+_TIP_ACT+')','g'),'\n');
+  /* ligne vide entre la description et la premiere action (sauf si le tip
+     commence directement par une action, ou si la ligne vide existe deja) */
+  if(!new RegExp('^'+_TIP_ACT).test(d)&&!new RegExp('\\n\\n'+_TIP_ACT).test(d))
+    d=d.replace(new RegExp('([^\\n])\\n(?='+_TIP_ACT+')'),'$1\n\n');
+  return d;
+}
 function _tipText(t){
   const parts=[];
   const ref=t.getAttribute('data-ref');
@@ -2897,7 +2947,7 @@ function _tipText(t){
   if(gp&&gp.pos_extra) parts.push('✎ mots : '+gp.pos_extra);
   if(gp&&gp.neg_extra) parts.push('⊘ négatif : '+gp.neg_extra);
   const d=t.getAttribute('data-tip');
-  if(d) parts.push(d);
+  if(d) parts.push(_fmtTipActions(d));
   return parts.join('\n');
 }
 let _tipTimer=null,_tipTarget=null;
@@ -2944,7 +2994,7 @@ document.addEventListener('mouseover',e=>{
     if(y+tip.offsetHeight>window.innerHeight-8) y=r.top-tip.offsetHeight-8;
     tip.style.left=Math.max(4,x)+'px';
     tip.style.top=Math.max(4,y)+'px';
-  },+t.getAttribute('data-tipdelay')||2000); /* delai par element (image consultee : rapide) */
+  },+t.getAttribute('data-tipdelay')||500); /* 0,5 s par defaut (data-tipdelay par element) */
 });
 document.addEventListener('mouseout',e=>{
   if(_tipTarget&&_tipTarget.contains(e.target)&&!_tipTarget.contains(e.relatedTarget)) hideTip();
