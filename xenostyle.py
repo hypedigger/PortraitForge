@@ -902,11 +902,12 @@ def _apply_framing(cfgset, stem):
 
 
 # ------------------------------------------------- regard par portrait
-# "viewer" (looking at viewer) ou "" (aucune directive, defaut). Les anciens
-# termes de regard ("looking ahead", suffixes historiques...) sont retires du
-# prompt final quelle que soit leur provenance (suffixe du style ou du jeu,
-# mots du popup), puis le choix du personnage est reinjecte.
+# "viewer" (looking at viewer), "ahead" (looking ahead) ou "" (aucune
+# directive, defaut). Les termes de regard existants (suffixes historiques,
+# mots du popup) sont retires du prompt final quelle que soit leur
+# provenance, puis le choix du personnage est reinjecte.
 _GAZE_TOKENS = {"looking ahead", "looking at viewer"}
+_GAZE_WORDS = {"viewer": "looking at viewer", "ahead": "looking ahead"}
 
 
 def _apply_gaze(cfgset, stem):
@@ -914,8 +915,8 @@ def _apply_gaze(cfgset, stem):
     toks = [t.strip() for t in cfgset["positive"].split(",")]
     toks = [t for t in toks if t and t.lower() not in _GAZE_TOKENS]
     cfgset["positive"] = ", ".join(toks)
-    if g == "viewer":
-        cfgset["positive"] += ", looking at viewer"
+    if g in _GAZE_WORDS:
+        cfgset["positive"] += ", " + _GAZE_WORDS[g]
 
 
 def _apply_portrait_words(cfgset, stem):

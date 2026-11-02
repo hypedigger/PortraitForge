@@ -462,7 +462,9 @@ function renderDetail(){
       '<div class="sxrow">'+
       '<button class="sxb sxg'+((m.gaze==='viewer')?' on':'')+'" '+
         'title="ajoute \'looking at viewer\' au prompt : le personnage regarde la caméra">👁 Caméra</button>'+
-      '<button class="sxb sxg'+((m.gaze==='viewer')?'':' on')+'" '+
+      '<button class="sxb sxg'+((m.gaze==='ahead')?' on':'')+'" '+
+        'title="ajoute \'looking ahead\' au prompt : le personnage regarde droit devant lui">➡ Devant</button>'+
+      '<button class="sxb sxg'+(!m.gaze?' on':'')+'" '+
         'title="aucune directive de regard dans le prompt (le ControlNet suit la pose d\'origine)">∅ Libre</button>'+
       '</div>'+
       '<input class="sxtxt'+(sx==='other'?' show':'')+'" placeholder="ex: monster, furry" value="'+((m.text||'').replace(/"/g,'&quot;'))+'">';
@@ -479,7 +481,7 @@ function renderDetail(){
       /* clic sur le cadrage deja force = retour a l'auto-detection */
       await setFraming(p.stem,(m.framing===frvals[i])?null:frvals[i]);
     };});
-    left.querySelectorAll('.sxg').forEach((b,i)=>{b.onclick=()=>setGaze(p.stem,i===0?'viewer':null);});
+    left.querySelectorAll('.sxg').forEach((b,i)=>{b.onclick=()=>setGaze(p.stem,['viewer','ahead',null][i]);});
     left.querySelector('.sxtxt').onchange=(e)=>setSex(p.stem,'other',e.target.value);
     row.appendChild(left);
     const co=document.createElement('div');co.className='cell orig';
@@ -862,14 +864,17 @@ async function setSex(stem,sex,text){
   S.meta[stem]=Object.assign({},S.meta[stem],{sex:sex,text:text||''});
   render();
 }
-/* regard du personnage : 'viewer' (looking at viewer) ou null (aucune directive) */
+/* regard du personnage : 'viewer' (looking at viewer), 'ahead' (looking
+   ahead) ou null (aucune directive) */
 async function setGaze(stem,v){
   await fetch('/api/meta',{method:'POST',body:JSON.stringify({stem:stem,gaze:v})});
   const m=Object.assign({},S.meta[stem]);
   if(v) m.gaze=v; else delete m.gaze;
   S.meta[stem]=m;
   render();
-  toast(v?T('👁 Regard : looking at viewer'):T('👁 Regard : libre (aucune directive)'));
+  toast(v==='viewer'?T('👁 Regard : looking at viewer')
+       :v==='ahead'?T('👁 Regard : looking ahead')
+       :T('👁 Regard : libre (aucune directive)'));
 }
 
 /* ---------- regen popup ---------- */

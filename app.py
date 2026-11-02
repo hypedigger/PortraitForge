@@ -1311,9 +1311,10 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     cur.pop("framing", None)
             if "gaze" in body:
-                # regard : "viewer" (looking at viewer) ; autre valeur = aucun
-                if body.get("gaze") == "viewer":
-                    cur["gaze"] = "viewer"
+                # regard : "viewer" (looking at viewer) / "ahead" (looking
+                # ahead) ; autre valeur = aucune directive
+                if body.get("gaze") in ("viewer", "ahead"):
+                    cur["gaze"] = body["gaze"]
                 else:
                     cur.pop("gaze", None)
             if "sex" in body:
