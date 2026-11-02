@@ -1310,6 +1310,12 @@ class Handler(BaseHTTPRequestHandler):
                     cur["framing"] = body["framing"]
                 else:
                     cur.pop("framing", None)
+            if "gaze" in body:
+                # regard : "viewer" (looking at viewer) ; autre valeur = aucun
+                if body.get("gaze") == "viewer":
+                    cur["gaze"] = "viewer"
+                else:
+                    cur.pop("gaze", None)
             if "sex" in body:
                 sex = body.get("sex")
                 if sex in ("male", "female", "other"):

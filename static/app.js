@@ -459,8 +459,14 @@ function renderDetail(){
       '<button class="sxb sxf'+(frEff==='full'?' on':'')+(frExp==='full'?' forced':'')+'" '+
         'title="'+(frExp==='full'?'cadrage forcé : plein pied — re-clic : retour auto':'cadrage plein pied'+(frExp?'':' (auto-détecté)'))+'">🧍 Pied</button>'+
       '</div>'+
+      '<div class="sxrow">'+
+      '<button class="sxb sxg'+((m.gaze==='viewer')?' on':'')+'" '+
+        'title="ajoute \'looking at viewer\' au prompt : le personnage regarde la caméra">👁 Caméra</button>'+
+      '<button class="sxb sxg'+((m.gaze==='viewer')?'':' on')+'" '+
+        'title="aucune directive de regard dans le prompt (le ControlNet suit la pose d\'origine)">∅ Libre</button>'+
+      '</div>'+
       '<input class="sxtxt'+(sx==='other'?' show':'')+'" placeholder="ex: monster, furry" value="'+((m.text||'').replace(/"/g,'&quot;'))+'">';
-    const bs=left.querySelectorAll('.sxb:not(.sxf)');
+    const bs=left.querySelectorAll('.sxb:not(.sxf):not(.sxg)');
     const sexes=['male','female','other'];
     const clss=['m','f','o'];
     bs.forEach((b,i)=>{b.onclick=async(ev)=>{
@@ -473,6 +479,7 @@ function renderDetail(){
       /* clic sur le cadrage deja force = retour a l'auto-detection */
       await setFraming(p.stem,(m.framing===frvals[i])?null:frvals[i]);
     };});
+    left.querySelectorAll('.sxg').forEach((b,i)=>{b.onclick=()=>setGaze(p.stem,i===0?'viewer':null);});
     left.querySelector('.sxtxt').onchange=(e)=>setSex(p.stem,'other',e.target.value);
     row.appendChild(left);
     const co=document.createElement('div');co.className='cell orig';
@@ -851,8 +858,18 @@ async function setFraming(stem,v){
 }
 async function setSex(stem,sex,text){
   await fetch('/api/meta',{method:'POST',body:JSON.stringify({stem:stem,sex:sex,text:text||''})});
-  if(sex) S.meta[stem]={sex:sex,text:text||''}; else delete S.meta[stem];
+  /* fusion locale : ne pas ecraser framing / gaze */
+  S.meta[stem]=Object.assign({},S.meta[stem],{sex:sex,text:text||''});
   render();
+}
+/* regard du personnage : 'viewer' (looking at viewer) ou null (aucune directive) */
+async function setGaze(stem,v){
+  await fetch('/api/meta',{method:'POST',body:JSON.stringify({stem:stem,gaze:v})});
+  const m=Object.assign({},S.meta[stem]);
+  if(v) m.gaze=v; else delete m.gaze;
+  S.meta[stem]=m;
+  render();
+  toast(v?T('👁 Regard : looking at viewer'):T('👁 Regard : libre (aucune directive)'));
 }
 
 /* ---------- regen popup ---------- */
@@ -2639,8 +2656,10 @@ function popApplyGenParams(gp){
   /* champ positif : pre-rempli avec TOUS les mots propres a l'image ; le
      drapeau noauto evite que les tags auto soient reinjectes en plus */
   if(gp.base_pos&&gp.positive){
+    /* le regard est pilote par le bouton 👁 du personnage, pas par le champ */
+    const gzTok=new Set(['looking ahead','looking at viewer']);
     document.getElementById('popPos').value=
-      _toks(gp.positive).filter(t=>!bp.has(t.toLowerCase())).join(', ');
+      _toks(gp.positive).filter(t=>!bp.has(t.toLowerCase())&&!gzTok.has(t.toLowerCase())).join(', ');
     document.getElementById('popPos').dataset.noauto='1';
   }else document.getElementById('popPos').value=gp.pos_extra||'';
   document.getElementById('popNeg').value=gp.neg_extra||'';

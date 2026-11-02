@@ -17,7 +17,7 @@
       "prefix": "masterpiece, best quality, amazing quality, ",
       "negative": "worst quality, bad quality, jpeg artifacts, blurry, text, watermark, signature, logo, censored"
     },
-    "suffix": ", portrait, upper body, solo, looking ahead, detailed face, simple background"
+    "suffix": ", portrait, upper body, solo, detailed face, simple background"
   },
   "styles": {
     "manga_90s": {

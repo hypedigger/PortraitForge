@@ -654,6 +654,7 @@ def generate_variant(styles_cfg, style_key, portrait, seed=None, denoise=None,
     if neg_extra and neg_extra.strip():
         cfgset["negative"] += ", " + neg_extra.strip()
     _apply_framing(cfgset, portrait["stem"])
+    _apply_gaze(cfgset, portrait["stem"])
     _apply_portrait_words(cfgset, portrait["stem"])
     pos_extra, neg_extra = portrait_prompt_tags(portrait["stem"])
     char_tags = ""
@@ -763,6 +764,7 @@ def generate_custom(portrait, opts):
         if pick:
             src_path = os.path.join(STYLIZED_DIR, CUSTOM_KEY, stem, pick)
     _apply_framing(cfgset, stem)
+    _apply_gaze(cfgset, stem)
     rgb, alpha = prepare_input(src_path, cfgset["size"])
     cfgset["width"], cfgset["height"] = rgb.size
     up_name = upload_image(rgb, "xenostyle_%s.png" % stem)
@@ -897,6 +899,23 @@ def _apply_framing(cfgset, stem):
     toks = [t for t in toks if t and t.lower() not in _FRAMING_TOKENS]
     cfgset["positive"] = ", ".join(toks) + ", " + FRAMING_POS[fr]
     cfgset["negative"] += ", " + FRAMING_NEG[fr]
+
+
+# ------------------------------------------------- regard par portrait
+# "viewer" (looking at viewer) ou "" (aucune directive, defaut). Les anciens
+# termes de regard ("looking ahead", suffixes historiques...) sont retires du
+# prompt final quelle que soit leur provenance (suffixe du style ou du jeu,
+# mots du popup), puis le choix du personnage est reinjecte.
+_GAZE_TOKENS = {"looking ahead", "looking at viewer"}
+
+
+def _apply_gaze(cfgset, stem):
+    g = (load_portrait_meta().get(stem) or {}).get("gaze") or ""
+    toks = [t.strip() for t in cfgset["positive"].split(",")]
+    toks = [t for t in toks if t and t.lower() not in _GAZE_TOKENS]
+    cfgset["positive"] = ", ".join(toks)
+    if g == "viewer":
+        cfgset["positive"] += ", looking at viewer"
 
 
 def _apply_portrait_words(cfgset, stem):
