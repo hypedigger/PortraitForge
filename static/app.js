@@ -2017,6 +2017,8 @@ function renderTriQual(){
         '<button class="sxb sxg qgz'+(m.gaze==='custom'?' on':'')+'" '+
           'title="regard en texte libre (ex: looking away, looking up)">✎</button></div>'+
       '<input class="sxtxt qtxt-gz'+(m.gaze==='custom'?' show':'')+'" placeholder="ex: looking away, looking up" value="'+_esc(m.gaze_text||'')+'">'+
+      '<div class="qtags" data-tip="tags auto-détectés (bouton 🏷 Analyser) — injectés dans tous les prompts de ce personnage : '+_esc((S.tags&&S.tags[p.stem])||'aucun')+'">🏷 '+
+        _esc((S.tags&&S.tags[p.stem])||'— pas encore analysé —')+'</div>'+
       '</div></div>';
   }
   h+='</div>';

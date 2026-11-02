@@ -607,6 +607,7 @@ class Handler(BaseHTTPRequestHandler):
                         "games": [dict(x, destination=xs.game_destination(x))
                                   for x in xs.load_games()["games"]],
                         "tags_done": len(xs.load_portrait_tags()) > 0,
+                        "tags": xs.load_portrait_tags(),
                         "defaults": {
                             "pony_prefix": cfg["defaults"]["pony"]["prefix"],
                             "pony_negative": cfg["defaults"]["pony"]["negative"],
