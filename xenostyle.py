@@ -970,6 +970,12 @@ def load_portrait_tags():
     return {}
 
 
+def save_portrait_tags(tags):
+    """Tags edites a la main (onglet Qualification)."""
+    with open(TAGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(tags, f, indent=1, ensure_ascii=False)
+
+
 def load_excluded():
     """Stems a garder tels quels (pas des personnages / pas a styliser)."""
     return set(_state_load("excluded", EXCLUDED_FILE, []))

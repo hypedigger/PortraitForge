@@ -99,6 +99,27 @@ def tag_image(sess, tags, path, threshold):
     return [n for n, _ in found[:MAX_TAGS]]
 
 
+def _sync_gaze_closed_eyes(cur, tag_str):
+    """'closed eyes' detecte -> regard custom 'closed eyes' si aucun regard
+    n'est defini pour ce perso ; tag disparu -> retire ce reglage SI c'est le
+    tagger qui l'avait pose (gaze_text == 'closed eyes'). Un choix manuel
+    (camera/devant/libre explicite ou autre texte custom) n'est jamais touche.
+    Retourne le nouveau dict meta du perso, ou None si rien ne change."""
+    closed = "closed eyes" in (tag_str or "")
+    if closed and not cur.get("gaze"):
+        cur = dict(cur)
+        cur["gaze"] = "custom"
+        cur["gaze_text"] = "closed eyes"
+        return cur
+    if not closed and cur.get("gaze") == "custom" \
+       and (cur.get("gaze_text") or "").strip() == "closed eyes":
+        cur = dict(cur)
+        cur.pop("gaze", None)
+        cur.pop("gaze_text", None)
+        return cur
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stem", default=None)
@@ -133,6 +154,24 @@ def main():
         with open(TAGS_FILE, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=1, ensure_ascii=False)
     print("Termine :", len(existing), "portraits tagges ->", TAGS_FILE)
+    # regard "closed eyes" : synchronise depuis les tags (meta rechargee a la
+    # fin pour ecraser le moins possible d'eventuels changements via l'UI)
+    meta = xs.load_portrait_meta()
+    n_gaze = 0
+    for stem, tag_str in existing.items():
+        nv = _sync_gaze_closed_eyes(meta.get(stem) or {}, tag_str)
+        if nv is None:
+            continue
+        if nv:
+            meta[stem] = nv
+        else:
+            meta.pop(stem, None)
+        n_gaze += 1
+        print("regard:", stem, "->",
+              nv.get("gaze_text", "(retire)") if nv else "(retire)")
+    if n_gaze:
+        xs.save_portrait_meta(meta)
+    print("Regard 'closed eyes' : %d modification(s)" % n_gaze)
 
 
 if __name__ == "__main__":

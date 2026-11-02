@@ -2017,8 +2017,8 @@ function renderTriQual(){
         '<button class="sxb sxg qgz'+(m.gaze==='custom'?' on':'')+'" '+
           'title="regard en texte libre (ex: looking away, looking up)">✎</button></div>'+
       '<input class="sxtxt qtxt-gz'+(m.gaze==='custom'?' show':'')+'" placeholder="ex: looking away, looking up" value="'+_esc(m.gaze_text||'')+'">'+
-      '<div class="qtags" data-tip="tags auto-détectés (bouton 🏷 Analyser) — injectés dans tous les prompts de ce personnage : '+_esc((S.tags&&S.tags[p.stem])||'aucun')+'">🏷 '+
-        _esc((S.tags&&S.tags[p.stem])||'— pas encore analysé —')+'</div>'+
+      '<div class="qtags" data-tip="tags du personnage (auto-détectés, injectés dans tous ses prompts) · clic : modifier — liste complète : '+_esc((S.tags&&S.tags[p.stem])||'aucun')+'">🏷 '+
+        _esc((S.tags&&S.tags[p.stem])||'— pas encore analysé — clic : saisir à la main')+'</div>'+
       '</div></div>';
   }
   h+='</div>';
@@ -2047,6 +2047,24 @@ function renderTriQual(){
     card.querySelectorAll('.qgz').forEach((b,i)=>{b.onclick=()=>
       setGaze(stem,gzv[i],card.querySelector('.qtxt-gz').value);});
     card.querySelector('.qtxt-gz').onchange=e=>setGaze(stem,'custom',e.target.value);
+    /* tags : clic = edition sur place (zone de texte), Echap = annuler */
+    card.querySelector('.qtags').onclick=()=>{
+      const qt=card.querySelector('.qtags');
+      if(!qt) return;
+      const ta=document.createElement('textarea');
+      ta.className='qtagsedit';
+      ta.value=(S.tags&&S.tags[stem])||'';
+      qt.replaceWith(ta);
+      ta.focus();
+      ta.onkeydown=e=>{if(e.key==='Escape'){ta.value=(S.tags&&S.tags[stem])||'';ta.blur();}};
+      ta.onchange=async()=>{
+        await fetch('/api/tags',{method:'POST',body:JSON.stringify({stem:stem,tags:ta.value})});
+        (S.tags=S.tags||{})[stem]=ta.value.trim().replace(/^[, ]+|[, ]+$/g,'');
+        toast(T('🏷 Tags du personnage enregistrés'));
+        renderKeepScroll();
+      };
+      ta.onblur=()=>{ if(ta.value===((S.tags&&S.tags[stem])||'')) renderKeepScroll(); };
+    };
   }
 }
 /* changement du mode de tri (persiste et s'applique a toutes les vues) */

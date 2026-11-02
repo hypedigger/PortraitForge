@@ -1302,6 +1302,17 @@ class Handler(BaseHTTPRequestHandler):
                 words.pop(stem, None)
             xs.save_portrait_words(words)
             self._json({"ok": True})
+        elif p == "/api/tags":
+            # edition manuelle des tags d'un personnage (onglet Qualification)
+            tags = xs.load_portrait_tags()
+            stem = body.get("stem") or ""
+            v = (body.get("tags") or "").strip(" ,")
+            if v:
+                tags[stem] = v
+            else:
+                tags.pop(stem, None)
+            xs.save_portrait_tags(tags)
+            self._json({"ok": True})
         elif p == "/api/meta":
             meta = xs.load_portrait_meta()
             cur = dict(meta.get(body["stem"]) or {})
