@@ -144,22 +144,41 @@ def main():
         meta = xs.load_portrait_meta()
         portraits = [p for p in portraits
                      if (meta.get(p["stem"]) or {}).get("sex", "male") == args.sex]
+    closed_seen = {}  # detection de ce run (le tag ne va PAS dans la liste)
     for i, p in enumerate(portraits):
         if p["stem"] in existing and not args.force:
             continue
         found = tag_image(sess, tags, p["path"], args.threshold)
+        closed_seen[p["stem"]] = "closed eyes" in found
+        # le regard est porte par meta.gaze (custom "closed eyes") : on ne le
+        # duplique pas dans la liste de tags du personnage
+        found = [t for t in found if t != "closed eyes"]
         existing[p["stem"]] = ", ".join(found)
         print("[%d/%d] %s -> %s" % (i + 1, len(portraits), p["stem"],
                                     existing[p["stem"]]))
         with open(TAGS_FILE, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=1, ensure_ascii=False)
     print("Termine :", len(existing), "portraits tagges ->", TAGS_FILE)
-    # regard "closed eyes" : synchronise depuis les tags (meta rechargee a la
-    # fin pour ecraser le moins possible d'eventuels changements via l'UI)
+    # regard "closed eyes" : synchronise depuis la detection de ce run, ou
+    # migre depuis une ancienne liste de tags qui contenait encore le tag.
+    # Les stems ni analyses ce run ni porteurs du tag ne sont pas touches.
     meta = xs.load_portrait_meta()
     n_gaze = 0
-    for stem, tag_str in existing.items():
-        nv = _sync_gaze_closed_eyes(meta.get(stem) or {}, tag_str)
+    dirty_tags = False
+    for stem, tag_str in list(existing.items()):
+        if stem in closed_seen:
+            closed = closed_seen[stem]
+        elif "closed eyes" in tag_str:
+            closed = True  # ancien format : le tag migre vers meta.gaze
+        else:
+            continue
+        if "closed eyes" in tag_str:
+            existing[stem] = ", ".join(
+                t for t in (x.strip() for x in tag_str.split(","))
+                if t and t != "closed eyes")
+            dirty_tags = True
+        nv = _sync_gaze_closed_eyes(meta.get(stem) or {},
+                                    "closed eyes" if closed else "")
         if nv is None:
             continue
         if nv:
@@ -169,6 +188,10 @@ def main():
         n_gaze += 1
         print("regard:", stem, "->",
               nv.get("gaze_text", "(retire)") if nv else "(retire)")
+    if dirty_tags:
+        with open(TAGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(existing, f, indent=1, ensure_ascii=False)
+        print("Tags nettoyes : 'closed eyes' retire des listes existantes")
     if n_gaze:
         xs.save_portrait_meta(meta)
     print("Regard 'closed eyes' : %d modification(s)" % n_gaze)
