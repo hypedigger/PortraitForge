@@ -364,7 +364,8 @@ function renderMatrix(){
   const cols=[{key:'_custom',label:'✨ Custom'}].concat(visStyles());
   const stemCol=(S.settings&&S.settings.show_stem_col)?'':' nostem';
   let h='<div id="hscroll" class="hscroll"><div></div></div><div class="mwrap"><table class="matrix mixtbl'+stemCol+'"><tr><th>Perso</th><th>Original</th><th data-tip="image qui sera exportée pour ce personnage">Choix</th>';
-  for(const st of cols) h+='<th class="mstyle" onclick="gotoStyle(\''+st.key+'\')" data-tip="clic gauche : ouvrir la vue Par style pour cet artiste">'+st.label+'</th>';
+  for(const st of cols) h+='<th class="mstyle" onclick="gotoStyle(\''+st.key+'\')" data-tip="clic gauche : ouvrir la vue Par style pour cet artiste">'+st.label+
+    (st.key==='_custom'?'':'<span class="mmenu" onclick="styleCtx(event,\''+st.key+'\')" data-tip="menu de l\'artiste : recherche d\'images, masquer">⋯</span>')+'</th>';
   h+='</tr>';
   for(const p of visiblePortraits()){
     h+='<tr><td class="mstem" onclick="verOpenAll(event,\''+p.stem+'\')" data-tip="clic gauche : toutes les versions de ce portrait (tous styles)">'+p.stem+'</td>';
@@ -442,47 +443,16 @@ function renderDetail(){
     row.onmouseenter=()=>{setCur(p.stem,false);};
     const left=document.createElement('div');left.className='stemname';
     const m=S.meta[p.stem]||{};
-    const sx=m.sex||'male'; /* defaut : male */
-    const frExp=m.framing||'';                       /* '' = auto */
+    /* resume de la qualification (sexe · cadrage · regard) — l'edition se
+       fait dans Tri des textures > Qualification (clic sur le resume) */
+    const sxIco={male:'♂',female:'♀',other:'✎'}[m.sex||'male'];
     const frEff=(S.framing&&S.framing[p.stem])||'portrait';
-    left.innerHTML=
-      '<div class="sxrow">'+
-      '<button class="sxb m'+(sx==='male'?' on':'')+'" title="mâle">♂ Mâle</button>'+
-      '<button class="sxb f'+(sx==='female'?' on':'')+'" title="femelle">♀ Fem.</button>'+
-      '</div>'+
-      '<div class="sxrow">'+
-      '<button class="sxb o'+(sx==='other'?' on':'')+'" title="autre (texte libre)">✎ Autre</button>'+
-      '</div>'+
-      '<div class="sxrow">'+
-      '<button class="sxb sxf'+(frEff==='portrait'?' on':'')+(frExp==='portrait'?' forced':'')+'" '+
-        'title="'+(frExp==='portrait'?'cadrage forcé : buste — re-clic : retour auto':'cadrage buste'+(frExp?'':' (auto-détecté)'))+'">👤 Buste</button>'+
-      '<button class="sxb sxf'+(frEff==='full'?' on':'')+(frExp==='full'?' forced':'')+'" '+
-        'title="'+(frExp==='full'?'cadrage forcé : plein pied — re-clic : retour auto':'cadrage plein pied'+(frExp?'':' (auto-détecté)'))+'">🧍 Pied</button>'+
-      '</div>'+
-      '<div class="sxrow">'+
-      '<button class="sxb sxg'+((m.gaze==='viewer')?' on':'')+'" '+
-        'title="ajoute \'looking at viewer\' au prompt : le personnage regarde la caméra">👁 Caméra</button>'+
-      '<button class="sxb sxg'+((m.gaze==='ahead')?' on':'')+'" '+
-        'title="ajoute \'looking ahead\' au prompt : le personnage regarde droit devant lui">➡ Devant</button>'+
-      '<button class="sxb sxg'+(!m.gaze?' on':'')+'" '+
-        'title="aucune directive de regard dans le prompt (le ControlNet suit la pose d\'origine)">∅ Libre</button>'+
-      '</div>'+
-      '<input class="sxtxt'+(sx==='other'?' show':'')+'" placeholder="ex: monster, furry" value="'+((m.text||'').replace(/"/g,'&quot;'))+'">';
-    const bs=left.querySelectorAll('.sxb:not(.sxf):not(.sxg)');
-    const sexes=['male','female','other'];
-    const clss=['m','f','o'];
-    bs.forEach((b,i)=>{b.onclick=async(ev)=>{
-      const r=ev.currentTarget.getBoundingClientRect();
-      await setSex(p.stem,sexes[i],left.querySelector('.sxtxt').value);
-      if(sexes[i]!=='other') advanceScroll(p.stem,clss[i],r);
-    };});
-    const frvals=['portrait','full'];
-    left.querySelectorAll('.sxf').forEach((b,i)=>{b.onclick=async()=>{
-      /* clic sur le cadrage deja force = retour a l'auto-detection */
-      await setFraming(p.stem,(m.framing===frvals[i])?null:frvals[i]);
-    };});
-    left.querySelectorAll('.sxg').forEach((b,i)=>{b.onclick=()=>setGaze(p.stem,['viewer','ahead',null][i]);});
-    left.querySelector('.sxtxt').onchange=(e)=>setSex(p.stem,'other',e.target.value);
+    const frIco=m.framing==='none'?'∅':m.framing==='custom'?'✎':(frEff==='full'?'🧍':'👤');
+    const gzIco=m.gaze==='viewer'?'👁':m.gaze==='ahead'?'➡':m.gaze==='custom'?'✎':'∅';
+    left.innerHTML='<div class="qsum">'+p.stem+'</div>'+
+      '<div class="qbadges" data-tip="sexe · cadrage · regard — clic : modifier la qualification (Tri des textures › Qualification)">'+
+      sxIco+' · '+frIco+' · '+gzIco+'</div>';
+    left.querySelector('.qbadges').onclick=()=>gotoQual(p.stem);
     row.appendChild(left);
     const co=document.createElement('div');co.className='cell orig';
     co.innerHTML='<img class="thumb" loading="lazy" data-tip="texture originale · clic droit : zoom" src="/thumb/original/'+p.stem+'">';
@@ -601,7 +571,8 @@ function advanceScroll(stem,cls,prevRect){
   const ps=visiblePortraits();
   const i=ps.findIndex(x=>x.stem===stem);
   if(i<0||i+1>=ps.length) return;
-  const nrow=document.getElementById('row-'+ps[i+1].stem);
+  const nrow=document.getElementById('row-'+ps[i+1].stem)
+           ||document.getElementById('q-'+ps[i+1].stem);
   if(!nrow) return;
   const nb=nrow.querySelector('.sxb.'+cls);
   if(!nb) return;
@@ -852,28 +823,37 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='Escape'){e.preventDefault();cropCancel();}
 },true);
 
-/* cadrage force (portrait/full) ou retour auto (null) pour un personnage */
-async function setFraming(stem,v){
-  await fetch('/api/meta',{method:'POST',body:JSON.stringify({stem:stem,framing:v})});
-  await refresh(); render();
-  toast(v?('🖼 Cadrage forcé : '+(v==='full'?'plein pied':'buste')):T('🖼 Cadrage : retour à l\'auto-détection'));
+/* re-rendu sans perdre la position de defilement (listes de qualification) */
+function renderKeepScroll(){const y=window.scrollY;render();window.scrollTo(0,y);}
+/* cadrage d'un personnage : 'portrait'/'full' (force), 'none' (aucune
+   directive), 'custom' (texte libre), null = retour auto */
+async function setFraming(stem,v,text){
+  await fetch('/api/meta',{method:'POST',body:JSON.stringify(
+    {stem:stem,framing:v,framing_text:text||''})});
+  await refresh(); renderKeepScroll();
+  toast(v==='none'?T('🖼 Cadrage : aucune directive')
+       :v==='custom'?T('🖼 Cadrage custom enregistré')
+       :v?('🖼 Cadrage forcé : '+(v==='full'?'plein pied':'buste'))
+       :T('🖼 Cadrage : retour à l\'auto-détection'));
 }
 async function setSex(stem,sex,text){
   await fetch('/api/meta',{method:'POST',body:JSON.stringify({stem:stem,sex:sex,text:text||''})});
   /* fusion locale : ne pas ecraser framing / gaze */
   S.meta[stem]=Object.assign({},S.meta[stem],{sex:sex,text:text||''});
-  render();
+  renderKeepScroll();
 }
-/* regard du personnage : 'viewer' (looking at viewer), 'ahead' (looking
-   ahead) ou null (aucune directive) */
-async function setGaze(stem,v){
-  await fetch('/api/meta',{method:'POST',body:JSON.stringify({stem:stem,gaze:v})});
+/* regard : 'viewer' / 'ahead', 'custom' (texte libre), null = aucune directive */
+async function setGaze(stem,v,text){
+  await fetch('/api/meta',{method:'POST',body:JSON.stringify(
+    {stem:stem,gaze:v,gaze_text:text||''})});
   const m=Object.assign({},S.meta[stem]);
   if(v) m.gaze=v; else delete m.gaze;
+  if(v==='custom') m.gaze_text=text||''; else delete m.gaze_text;
   S.meta[stem]=m;
-  render();
+  renderKeepScroll();
   toast(v==='viewer'?T('👁 Regard : looking at viewer')
        :v==='ahead'?T('👁 Regard : looking ahead')
+       :v==='custom'?T('👁 Regard custom enregistré')
        :T('👁 Regard : libre (aucune directive)'));
 }
 
@@ -1261,7 +1241,8 @@ function renderMix(){
     ' <button onclick="contactSheet()" style="font-size:11px;padding:3px 8px;margin-left:10px" '+
     'title="génère une grande image : chaque personnage avec son original au-dessus de l\'image choisie (dans _selected/)">🖼 Planche contact</button></div>';
   h+='<div id="hscroll" class="hscroll"><div></div></div><div class="mwrap"><table class="matrix mixtbl'+((S.settings&&S.settings.show_stem_col)?'':' nostem')+'"><tr><th>Perso</th><th>Original</th><th data-tip="image qui sera exportée pour ce personnage">Choix</th>';
-  for(const st of colStyles()) h+='<th class="mstyle" onclick="gotoStyle(\''+st.key+'\')" data-tip="clic gauche : ouvrir la vue Par style">'+st.label+'</th>';
+  for(const st of colStyles()) h+='<th class="mstyle" onclick="gotoStyle(\''+st.key+'\')" data-tip="clic gauche : ouvrir la vue Par style">'+st.label+
+    (st.key==='_custom'?'':'<span class="mmenu" onclick="styleCtx(event,\''+st.key+'\')" data-tip="menu de l\'artiste : recherche d\'images, masquer">⋯</span>')+'</th>';
   h+='</tr>';
   for(const p of visiblePortraits()){
     const fc=finalChoice(p.stem);
@@ -1337,6 +1318,35 @@ function mixCtx(ev,stem,sk){
   ctx.style.top=Math.min(window.innerHeight-160,ev.clientY)+'px';
 }
 function hideCtx(){const c=document.getElementById('ctx');if(c)c.style.display='none';}
+/* menu d'un artiste (bouton ⋯ des en-tetes de colonnes) */
+function styleCtx(ev,sk){
+  ev.preventDefault();ev.stopPropagation();
+  const ctx=document.getElementById('ctx');
+  ctx.innerHTML='';
+  const q=encodeURIComponent(styleLabel(sk)+' artwork');
+  const items=[
+    ['🔍 Google Images',()=>window.open('https://www.google.com/search?tbm=isch&q='+q,'_blank','noopener')],
+    ['🔍 Yandex Images',()=>window.open('https://yandex.com/images/search?text='+q,'_blank','noopener')],
+    ['🙈 Masquer cet artiste',()=>hideStyle(sk)]
+  ];
+  for(const [label,fn] of items){
+    const b=document.createElement('button');b.textContent=label;
+    b.onclick=()=>{hideCtx();fn();};
+    ctx.appendChild(b);
+  }
+  ctx.style.display='flex';
+  ctx.style.left=Math.min(window.innerWidth-240,ev.clientX)+'px';
+  ctx.style.top=Math.min(window.innerHeight-160,ev.clientY)+'px';
+}
+async function hideStyle(sk){
+  const hid=((S.settings&&S.settings.hidden_styles)||[]).slice();
+  if(!hid.includes(sk)) hid.push(sk);
+  (S.settings=S.settings||{}).hidden_styles=hid;
+  await fetch('/api/settings',{method:'POST',body:JSON.stringify({hidden_styles:hid})});
+  buildStyleSel();
+  render();
+  toast(T('🙈 Artiste masqué — réaffichable dans Options > Artistes'));
+}
 
 /* ---------- options de l'app ---------- */
 function optOpen(){
@@ -1886,19 +1896,27 @@ async function progDel(ev,btn){
 }
 
 /* ---------- tri ---------- */
-function renderTri(){
-  const c=document.getElementById('content');
+let triTab='orig';
+try{triTab=localStorage.getItem('pf_tritab')||'orig';}catch(e){}
+function triSwitch(t){
+  triTab=t;
+  try{localStorage.setItem('pf_tritab',t);}catch(e){}
+  render();
+}
+/* ouvre Tri des textures > Qualification, centre sur un personnage */
+function gotoQual(stem){
+  mode='tri';triTab='qual';
+  try{localStorage.setItem('pf_tritab','qual');}catch(e){}
+  render();
+  const el=document.getElementById('q-'+stem);
+  if(el){el.scrollIntoView({block:'center'});el.classList.add('qhl');
+    setTimeout(()=>el.classList.remove('qhl'),1600);}
+}
+/* selecteurs d'ordre (partages entre les deux sous-onglets du Tri) */
+function triSortSelectorsHtml(){
   const sortMode=(S.settings&&S.settings.sort_portraits)||'date';
   const sort2=(S.settings&&S.settings.sort_secondary)||'date';
-  let h='<div class="hint">Clique sur une vignette pour basculer : '+
-   '<b style="color:#8fc">Stylisé</b> = sera régénéré dans les styles / '+
-   '<b style="color:#fc8">Garder l\'original</b> = texture non-personnage, laissée telle quelle '+
-   '(ignorée des autres vues, de la génération et de l\'export). '+
-   '<button id="btnTagger" onclick="runTagger()" title="détecte couleurs de cheveux/yeux, lunettes, casques... injectés dans les prompts pour la fidélité (~1-2 min, en arrière-plan)">🏷 Analyser les portraits (tags auto)</button>'+
-   (S.tags_done?' <span style="color:#4c4">✓ déjà analysés</span>':'')+
-   '</div>'+
-   '<div class="hint" style="display:flex;gap:10px;align-items:center">Ordre des portraits (toutes les vues) : '+
-   '<select id="triSortSel" onchange="triSetSort(this.value)">'+
+  return '<select id="triSortSel" onchange="triSetSort(this.value)">'+
     '<option value="date"'+(sortMode==='date'?' selected':'')+'>par date de création</option>'+
     '<option value="sexe"'+(sortMode==='sexe'?' selected':'')+'>par sexe</option>'+
     '<option value="name"'+((sortMode==='name'||sortMode==='nom')?' selected':'')+'>par nom de texture</option>'+
@@ -1908,7 +1926,29 @@ function renderTri(){
     '<option value="date"'+(sort2==='date'?' selected':'')+'>par date de création</option>'+
     '<option value="name"'+((sort2==='name'||sort2==='nom')?' selected':'')+'>par nom de texture</option>'+
     '<option value="custom"'+(sort2==='custom'?' selected':'')+'>custom (glisser-déposer)</option>'+
-   '</select>'):'')+
+   '</select>'):'');
+}
+function triTabsHtml(){
+  return '<div class="tritabs">'+
+    '<button class="'+(triTab!=='qual'?'on':'')+'" onclick="triSwitch(\'orig\')">🧹 Stylisé / Original</button>'+
+    '<button class="'+(triTab==='qual'?'on':'')+'" onclick="triSwitch(\'qual\')" '+
+    'title="sexe, cadrage et regard de chaque personnage (injectés dans les prompts)">🏷 Qualification</button></div>';
+}
+function renderTri(){
+  if(triTab==='qual'){renderTriQual();return;}
+  const c=document.getElementById('content');
+  const sortMode=(S.settings&&S.settings.sort_portraits)||'date';
+  const sort2=(S.settings&&S.settings.sort_secondary)||'date';
+  let h=triTabsHtml();
+  h+='<div class="hint">Clique sur une vignette pour basculer : '+
+   '<b style="color:#8fc">Stylisé</b> = sera régénéré dans les styles / '+
+   '<b style="color:#fc8">Garder l\'original</b> = texture non-personnage, laissée telle quelle '+
+   '(ignorée des autres vues, de la génération et de l\'export). '+
+   '<button id="btnTagger" onclick="runTagger()" title="détecte couleurs de cheveux/yeux, lunettes, casques... injectés dans les prompts pour la fidélité (~1-2 min, en arrière-plan)">🏷 Analyser les portraits (tags auto)</button>'+
+   (S.tags_done?' <span style="color:#4c4">✓ déjà analysés</span>':'')+
+   '</div>'+
+   '<div class="hint" style="display:flex;gap:10px;align-items:center">Ordre des portraits (toutes les vues) : '+
+   triSortSelectorsHtml()+
    '<span style="color:#8fd;font-size:12px">✋ glisse une vignette sur une autre pour la déplacer — au premier déplacement le tri passe en custom et l\'ordre affiché devient la base, mémorisée pour toutes les vues</span>'+
    '</div><div class="triwrap" id="triwrap">';
   for(const p of S.portraits){
@@ -1923,6 +1963,87 @@ function renderTri(){
   h+='</div>';
   c.innerHTML=h;
   triBindDnD();
+}
+/* ---------- tri > qualification (sexe / cadrage / regard par perso) ---------- */
+function qualCols(n){
+  try{localStorage.setItem('pf_qual_cols',n);}catch(e){}
+  renderKeepScroll();
+}
+function renderTriQual(){
+  const c=document.getElementById('content');
+  let cols=2;
+  try{cols=+(localStorage.getItem('pf_qual_cols')||2)||2;}catch(e){}
+  let h=triTabsHtml();
+  h+='<div class="hint" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+    'Qualification des personnages — <b>sexe</b>, <b>cadrage</b> et <b>regard</b>, injectés dans les prompts de toutes les générations. Ordre : '+
+    triSortSelectorsHtml()+
+    '<span class="qcolsw">Images par ligne :'+
+    [1,2,3].map(n=>'<button class="'+(cols===n?'on':'')+'" onclick="qualCols('+n+')">'+n+'</button>').join('')+
+    '</span></div>';
+  h+='<div class="qualgrid" style="grid-template-columns:repeat('+cols+',1fr)">';
+  for(const p of visiblePortraits()){
+    const m=S.meta[p.stem]||{};
+    const sx=m.sex||'male';
+    const frExp=m.framing||''; /* '' = auto */
+    const frEff=(S.framing&&S.framing[p.stem])||'portrait';
+    h+='<div class="qcard" id="q-'+p.stem+'" data-stem="'+p.stem+'">'+
+      '<img class="thumb" loading="lazy" src="/thumb/original/'+p.stem+'" data-tip="'+p.stem+' · clic droit : zoom">'+
+      '<div class="qside">'+
+      '<div class="qname">'+p.stem+'</div>'+
+      '<div class="qrow"><span class="qlbl">Sexe</span>'+
+        '<button class="sxb m qsx'+(sx==='male'?' on':'')+'" title="mâle">♂ Mâle</button>'+
+        '<button class="sxb f qsx'+(sx==='female'?' on':'')+'" title="femelle">♀ Fem.</button>'+
+        '<button class="sxb o qsx'+(sx==='other'?' on':'')+'" title="autre (texte libre)">✎</button></div>'+
+      '<input class="sxtxt qtxt-sex'+(sx==='other'?' show':'')+'" placeholder="ex: monster, furry" value="'+_esc(m.text||'')+'">'+
+      '<div class="qrow"><span class="qlbl">Cadrage</span>'+
+        '<button class="sxb sxf qfr'+((frExp==='portrait'||(!frExp&&frEff==='portrait'))?' on':'')+(frExp==='portrait'?' forced':'')+'" '+
+          'title="'+(frExp==='portrait'?'cadrage forcé : buste — re-clic : retour auto':'cadrage buste'+(frExp?'':' (auto-détecté)'))+'">👤 Buste</button>'+
+        '<button class="sxb sxf qfr'+((frExp==='full'||(!frExp&&frEff==='full'))?' on':'')+(frExp==='full'?' forced':'')+'" '+
+          'title="'+(frExp==='full'?'cadrage forcé : plein pied — re-clic : retour auto':'cadrage plein pied'+(frExp?'':' (auto-détecté)'))+'">🧍 Pied</button>'+
+        '<button class="sxb sxf qfr'+(frExp==='none'?' on':'')+'" '+
+          'title="aucune directive de cadrage dans le prompt — re-clic : retour auto">∅</button>'+
+        '<button class="sxb sxf qfr'+(frExp==='custom'?' on':'')+'" '+
+          'title="cadrage en texte libre (ex: cowboy shot, from behind)">✎</button></div>'+
+      '<input class="sxtxt qtxt-fr'+(frExp==='custom'?' show':'')+'" placeholder="ex: cowboy shot, from behind" value="'+_esc(m.framing_text||'')+'">'+
+      '<div class="qrow"><span class="qlbl">Regard</span>'+
+        '<button class="sxb sxg qgz'+((m.gaze==='viewer')?' on':'')+'" '+
+          'title="ajoute \'looking at viewer\' au prompt : le personnage regarde la caméra">👁 Caméra</button>'+
+        '<button class="sxb sxg qgz'+((m.gaze==='ahead')?' on':'')+'" '+
+          'title="ajoute \'looking ahead\' au prompt : le personnage regarde droit devant lui">➡ Devant</button>'+
+        '<button class="sxb sxg qgz'+(!m.gaze?' on':'')+'" '+
+          'title="aucune directive de regard dans le prompt (le ControlNet suit la pose d\'origine)">∅</button>'+
+        '<button class="sxb sxg qgz'+(m.gaze==='custom'?' on':'')+'" '+
+          'title="regard en texte libre (ex: looking away, looking up)">✎</button></div>'+
+      '<input class="sxtxt qtxt-gz'+(m.gaze==='custom'?' show':'')+'" placeholder="ex: looking away, looking up" value="'+_esc(m.gaze_text||'')+'">'+
+      '</div></div>';
+  }
+  h+='</div>';
+  c.innerHTML=h;
+  for(const card of c.querySelectorAll('.qcard')){
+    const stem=card.dataset.stem;
+    const m=S.meta[stem]||{};
+    const sexes=['male','female','other'];
+    const clss=['m','f','o'];
+    card.querySelectorAll('.qsx').forEach((b,i)=>{b.onclick=async(ev)=>{
+      const r=ev.currentTarget.getBoundingClientRect();
+      await setSex(stem,sexes[i],card.querySelector('.qtxt-sex').value);
+      /* enchainer les persos sans bouger la souris */
+      if(sexes[i]!=='other') advanceScroll(stem,clss[i],r);
+    };});
+    card.querySelector('.qtxt-sex').onchange=e=>setSex(stem,'other',e.target.value);
+    const frv=['portrait','full','none','custom'];
+    card.querySelectorAll('.qfr').forEach((b,i)=>{b.onclick=()=>{
+      const v=frv[i];
+      /* re-clic sur un cadrage deja force = retour a l'auto-detection */
+      setFraming(stem,(v!=='custom'&&m.framing===v)?null:v,
+                 card.querySelector('.qtxt-fr').value);
+    };});
+    card.querySelector('.qtxt-fr').onchange=e=>setFraming(stem,'custom',e.target.value);
+    const gzv=['viewer','ahead',null,'custom'];
+    card.querySelectorAll('.qgz').forEach((b,i)=>{b.onclick=()=>
+      setGaze(stem,gzv[i],card.querySelector('.qtxt-gz').value);});
+    card.querySelector('.qtxt-gz').onchange=e=>setGaze(stem,'custom',e.target.value);
+  }
 }
 /* changement du mode de tri (persiste et s'applique a toutes les vues) */
 async function triSetSort(v){

@@ -893,11 +893,24 @@ def portrait_framing(stem):
 
 
 def _apply_framing(cfgset, stem):
-    """Remplace les termes de cadrage du prompt par ceux du cadrage effectif."""
-    fr = portrait_framing(stem)
+    """Remplace les termes de cadrage du prompt par ceux du cadrage effectif.
+
+    meta.framing : 'portrait' / 'full' (force), 'none' (aucune directive),
+    'custom' (texte libre meta.framing_text), absent = auto-detection."""
+    meta = load_portrait_meta().get(stem) or {}
+    f = meta.get("framing")
     toks = [t.strip() for t in cfgset["positive"].split(",")]
     toks = [t for t in toks if t and t.lower() not in _FRAMING_TOKENS]
-    cfgset["positive"] = ", ".join(toks) + ", " + FRAMING_POS[fr]
+    cfgset["positive"] = ", ".join(toks)
+    if f == "none":
+        return
+    if f == "custom":
+        txt = (meta.get("framing_text") or "").strip(" ,")
+        if txt:
+            cfgset["positive"] += ", " + txt
+        return
+    fr = portrait_framing(stem)
+    cfgset["positive"] += ", " + FRAMING_POS[fr]
     cfgset["negative"] += ", " + FRAMING_NEG[fr]
 
 
@@ -911,11 +924,16 @@ _GAZE_WORDS = {"viewer": "looking at viewer", "ahead": "looking ahead"}
 
 
 def _apply_gaze(cfgset, stem):
-    g = (load_portrait_meta().get(stem) or {}).get("gaze") or ""
+    meta = load_portrait_meta().get(stem) or {}
+    g = meta.get("gaze") or ""
     toks = [t.strip() for t in cfgset["positive"].split(",")]
     toks = [t for t in toks if t and t.lower() not in _GAZE_TOKENS]
     cfgset["positive"] = ", ".join(toks)
-    if g in _GAZE_WORDS:
+    if g == "custom":
+        txt = (meta.get("gaze_text") or "").strip(" ,")
+        if txt:
+            cfgset["positive"] += ", " + txt
+    elif g in _GAZE_WORDS:
         cfgset["positive"] += ", " + _GAZE_WORDS[g]
 
 

@@ -1305,18 +1305,27 @@ class Handler(BaseHTTPRequestHandler):
             meta = xs.load_portrait_meta()
             cur = dict(meta.get(body["stem"]) or {})
             if "framing" in body:
-                # cadrage force (portrait / full) ; autre valeur = retour auto
-                if body.get("framing") in ("portrait", "full"):
+                # cadrage : portrait / full (force), none (aucune directive),
+                # custom (texte libre framing_text) ; autre valeur = auto
+                if body.get("framing") in ("portrait", "full", "none", "custom"):
                     cur["framing"] = body["framing"]
                 else:
                     cur.pop("framing", None)
+                if body.get("framing") == "custom":
+                    cur["framing_text"] = (body.get("framing_text") or "").strip()
+                else:
+                    cur.pop("framing_text", None)
             if "gaze" in body:
-                # regard : "viewer" (looking at viewer) / "ahead" (looking
-                # ahead) ; autre valeur = aucune directive
-                if body.get("gaze") in ("viewer", "ahead"):
+                # regard : viewer / ahead, custom (texte libre gaze_text) ;
+                # autre valeur = aucune directive
+                if body.get("gaze") in ("viewer", "ahead", "custom"):
                     cur["gaze"] = body["gaze"]
                 else:
                     cur.pop("gaze", None)
+                if body.get("gaze") == "custom":
+                    cur["gaze_text"] = (body.get("gaze_text") or "").strip()
+                else:
+                    cur.pop("gaze_text", None)
             if "sex" in body:
                 sex = body.get("sex")
                 if sex in ("male", "female", "other"):
