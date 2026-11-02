@@ -123,6 +123,9 @@ table.matrix{border-collapse:collapse}
 .matrix td.mstem:hover{color:#bff}
 /* selection globale : Perso + Original + Choix restent visibles au scroll horizontal
    (les offsets --mixl2/--mixl3 sont mesures apres rendu pour eviter tout chevauchement) */
+/* colonne Perso masquee (Options > Interface) : les cellules restent dans le
+   DOM (nth-child des colonnes epinglees inchangé), seul l'affichage est coupe */
+.mixtbl.nostem th:first-child,.mixtbl.nostem td:first-child{display:none}
 .mixtbl th:nth-child(2),.mixtbl td:nth-child(2){position:sticky;left:var(--mixl2,88px);z-index:5;background:var(--bg)}
 .mixtbl th:nth-child(3),.mixtbl td:nth-child(3){position:sticky;left:var(--mixl3,236px);z-index:5;background:var(--bg);border-right:2px solid #39404f}
 .mixtbl th:nth-child(-n+3){z-index:11;background:#12141a}

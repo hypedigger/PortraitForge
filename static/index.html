@@ -39,6 +39,7 @@
  <h3>Options</h3>
  <div class="opttabs">
   <button id="otG" class="on" onclick="optTab('G')">Général</button>
+  <button id="otI" onclick="optTab('I')">Interface</button>
   <button id="otN" onclick="optTab('N')">Génération</button>
   <button id="otP" onclick="optTab('P')">Prompts</button>
   <button id="otA" onclick="optTab('A')">Artistes</button>
@@ -150,6 +151,9 @@
     <option value="en">English</option>
    </select>
   </div>
+ </div>
+ <div id="osecI" class="osec" style="display:none">
+  <div><label title="colonne avec le nom de fichier du personnage dans Vue d'ensemble et Sélection globale. Masquée par défaut : le nom et les actions sont dans l'infobulle de l'image Original"><input type="checkbox" id="optStemCol" onchange="optStemColToggle()"> Afficher la colonne Perso (nom du fichier) ⓘ</label></div>
  </div>
  <div id="osecA" class="osec" style="display:none">
   <label>Artistes affichés :</label>

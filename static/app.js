@@ -347,8 +347,14 @@ function measureMixSticky(){
   if(!t||!t.rows.length) return;
   if(mw&&mw.scrollLeft>0) return; /* offsets faux si les colonnes sont deja epinglees */
   const cells=t.rows[0].cells;
-  document.documentElement.style.setProperty('--mixl2',cells[1].offsetLeft+'px');
-  document.documentElement.style.setProperty('--mixl3',cells[2].offsetLeft+'px');
+  /* remettre les offsets a 0 avant mesure : sticky + left decale la cellule
+     meme sans defilement (sinon on mesure la position deja epinglee) */
+  const de=document.documentElement.style;
+  de.setProperty('--mixl2','0px');
+  de.setProperty('--mixl3','0px');
+  void t.offsetWidth; /* reflow */
+  de.setProperty('--mixl2',cells[1].offsetLeft+'px');
+  de.setProperty('--mixl3',cells[2].offsetLeft+'px');
 }
 function renderMatrix(){
   const c=document.getElementById('content');
@@ -356,13 +362,14 @@ function renderMatrix(){
   /* en Vue d'ensemble la colonne Custom est TOUJOURS presente : c'est le
      point d'entree de l'upload d'images perso */
   const cols=[{key:'_custom',label:'✨ Custom'}].concat(visStyles());
-  let h='<div id="hscroll" class="hscroll"><div></div></div><div class="mwrap"><table class="matrix mixtbl"><tr><th>Perso</th><th>Original</th><th data-tip="image qui sera exportée pour ce personnage">Choix</th>';
+  const stemCol=(S.settings&&S.settings.show_stem_col)?'':' nostem';
+  let h='<div id="hscroll" class="hscroll"><div></div></div><div class="mwrap"><table class="matrix mixtbl'+stemCol+'"><tr><th>Perso</th><th>Original</th><th data-tip="image qui sera exportée pour ce personnage">Choix</th>';
   for(const st of cols) h+='<th class="mstyle" onclick="gotoStyle(\''+st.key+'\')" data-tip="clic gauche : ouvrir la vue Par style pour cet artiste">'+st.label+'</th>';
   h+='</tr>';
   for(const p of visiblePortraits()){
     h+='<tr><td class="mstem" onclick="verOpenAll(event,\''+p.stem+'\')" data-tip="clic gauche : toutes les versions de ce portrait (tous styles)">'+p.stem+'</td>';
     h+='<td><img class="oimg thumb" loading="lazy" src="/thumb/original/'+p.stem+'" '+
-      'style="cursor:pointer" data-tip="clic gauche : toutes les versions de ce portrait (tous styles) · clic droit : zoom" '+
+      'style="cursor:pointer" data-tip="'+p.stem+' — clic gauche : toutes les versions de ce portrait (tous styles) · clic droit : zoom" '+
       'onclick="verOpenAll(event,\''+p.stem+'\')"></td>';
     h+=choiceCell(p.stem,finalChoice(p.stem));
     for(const st of cols){
@@ -1231,7 +1238,7 @@ function renderMix(){
     (top.length?top.map(([k,n])=>'<b>'+styleLabel(k)+'</b> × '+n).join(' · '):'aucune sélection')+
     ' <button onclick="contactSheet()" style="font-size:11px;padding:3px 8px;margin-left:10px" '+
     'title="génère une grande image : chaque personnage avec son original au-dessus de l\'image choisie (dans _selected/)">🖼 Planche contact</button></div>';
-  h+='<div id="hscroll" class="hscroll"><div></div></div><div class="mwrap"><table class="matrix mixtbl"><tr><th>Perso</th><th>Original</th><th data-tip="image qui sera exportée pour ce personnage">Choix</th>';
+  h+='<div id="hscroll" class="hscroll"><div></div></div><div class="mwrap"><table class="matrix mixtbl'+((S.settings&&S.settings.show_stem_col)?'':' nostem')+'"><tr><th>Perso</th><th>Original</th><th data-tip="image qui sera exportée pour ce personnage">Choix</th>';
   for(const st of colStyles()) h+='<th class="mstyle" onclick="gotoStyle(\''+st.key+'\')" data-tip="clic gauche : ouvrir la vue Par style">'+st.label+'</th>';
   h+='</tr>';
   for(const p of visiblePortraits()){
@@ -1242,7 +1249,7 @@ function renderMix(){
     h+='<td class="'+(isOrig?'msel':'')+'"><div style="position:relative;display:inline-block">'+
       (isNone?'<span class="noneover" data-tip="aucun envoi pour ce personnage (choix explicite)">🚫</span>':'')+
       '<img class="oimg thumb" loading="lazy" src="/thumb/original/'+p.stem+'" '+
-      'style="cursor:pointer" data-tip="clic gauche : garder la texture ORIGINALE · re-clic : AUCUN envoi pour ce personnage · re-clic : retour au choix auto · clic droit : zoom" '+
+      'style="cursor:pointer" data-tip="'+p.stem+' — clic gauche : garder la texture ORIGINALE · re-clic : AUCUN envoi pour ce personnage · re-clic : retour au choix auto · clic droit : zoom" '+
       'onclick="mixOrigClick(\''+p.stem+'\')"></div></td>';
     h+=choiceCell(p.stem,fc);
     for(const st of colStyles()){
@@ -1312,6 +1319,7 @@ function hideCtx(){const c=document.getElementById('ctx');if(c)c.style.display='
 /* ---------- options de l'app ---------- */
 function optOpen(){
   const s=S.settings||{};
+  document.getElementById('optStemCol').checked=!!s.show_stem_col;
   document.getElementById('optRegenCount').value=s.regen_count||2;
   document.getElementById('optCustomCount').value=s.custom_count||5;
   document.getElementById('optGenAll').value=s.gen_all_count||2;
@@ -1405,10 +1413,18 @@ async function optNotifyToggle(){
   optSave();
 }
 function optTab(t){
-  for(const k of ['G','N','P','A','C','K']){
+  for(const k of ['G','I','N','P','A','C','K']){
     document.getElementById('osec'+k).style.display=(k===t)?'':'none';
     document.getElementById('ot'+k).className=(k===t)?'on':'';
   }
+}
+/* Options > Interface : colonne Perso (masquee par defaut, le nom est dans
+   l'infobulle de l'image Original) */
+async function optStemColToggle(){
+  const v=document.getElementById('optStemCol').checked;
+  (S.settings=S.settings||{}).show_stem_col=v;
+  await fetch('/api/settings',{method:'POST',body:JSON.stringify({show_stem_col:v})});
+  render();
 }
 async function optSave(){
   const rc=Math.max(1,Math.min(10,+document.getElementById('optRegenCount').value||2));
