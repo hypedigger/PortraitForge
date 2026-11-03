@@ -55,8 +55,7 @@ DEFAULT_SETTINGS = {"regen_count": 2, "hidden_styles": [],
                     "sort_portraits": "date", "sort_secondary": "date",
                     "lb_dense": False, "lb_bg": "grey", "notify_done": False,
                     "lang": "fr", "user_presets": {},
-                    "show_stem_col": False,
-                    "tri_limit": 100}  # textures affichees dans le Tri (0 = toutes)
+                    "show_stem_col": False}
 
 
 def apply_runtime_settings(s):

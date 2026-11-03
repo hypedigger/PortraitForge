@@ -1994,57 +1994,9 @@ function triSwitch(t){
   render();
 }
 /* ouvre Tri des textures > Qualification, centre sur un personnage */
-/* ---------- nombre de textures affichees dans le Tri (100 par defaut) ---------- */
-let _triMore=0; /* textures supplementaires demandees ("afficher plus"), session */
-function triLimit(){
-  const v=S&&S.settings?S.settings.tri_limit:100;
-  return (v===0)?Infinity:(+v>0?+v:100); /* 0 = tout afficher */
-}
-function triLimitCtlHtml(){
-  const v=S.settings&&S.settings.tri_limit!=null?S.settings.tri_limit:100;
-  const preset=[50,100,200,500,0];
-  const isCustom=!preset.includes(+v);
-  return '<span class="trilim" title="nombre de textures affichées (les suivantes via « Afficher plus » en bas de page)">Afficher : '+
-    '<select onchange="triLimitSelect(this.value)">'+
-    preset.map(n=>'<option value="'+n+'"'+(!isCustom&&+v===n?' selected':'')+'>'+(n?n:'tout')+'</option>').join('')+
-    '<option value="custom"'+(isCustom?' selected':'')+'>custom…</option></select>'+
-    '<input id="triLimCustom" type="number" min="1" step="10" value="'+(isCustom?v:'')+'" placeholder="ex: 150" '+
-    'style="display:'+(isCustom?'inline-block':'none')+'" onchange="triLimitSet(this.value)"></span>';
-}
-function triLimitSelect(v){
-  if(v==='custom'){
-    const inp=document.getElementById('triLimCustom');
-    inp.style.display='inline-block';inp.focus();
-    return;
-  }
-  triLimitSet(v);
-}
-async function triLimitSet(v){
-  const n=Math.max(0,parseInt(v,10)||0);
-  if(String(v).trim()===''||(n===0&&String(v)!=='0')) return;
-  (S.settings=S.settings||{}).tri_limit=n;
-  _triMore=0;
-  await fetch('/api/settings',{method:'POST',body:JSON.stringify({tri_limit:n})});
-  renderKeepScroll();
-}
-/* bas de page : X / Y affichees + afficher plus / tout */
-function triMoreHtml(shown,total){
-  if(shown>=total) return total>100?'<div class="trimore">'+total+' / '+total+' textures affichées</div>':'';
-  const step=Math.min(triLimit(),total-shown);
-  return '<div class="trimore">'+shown+' / '+total+' textures affichées '+
-    '<button onclick="triShowMore(false)">Afficher '+step+' de plus</button>'+
-    '<button onclick="triShowMore(true)">Tout afficher</button></div>';
-}
-function triShowMore(all){
-  _triMore+=all?1e9:triLimit();
-  renderKeepScroll();
-}
 function gotoQual(stem){
   mode='tri';triTab='qual';
   try{localStorage.setItem('pf_tritab','qual');}catch(e){}
-  /* le perso vise est au-dela de la limite : etendre l'affichage jusqu'a lui */
-  const idx=visiblePortraits().findIndex(p=>p.stem===stem);
-  if(idx>=triLimit()+_triMore) _triMore=idx+1-triLimit();
   render();
   const el=document.getElementById('q-'+stem);
   if(el){el.scrollIntoView({block:'center'});el.classList.add('qhl');
@@ -2085,12 +2037,11 @@ function renderTri(){
    '(ignorée des autres vues, de la génération et de l\'export). '+
    '</div>'+taggerBarHtml()+
    '<div class="hint" style="display:flex;gap:10px;align-items:center">Ordre des portraits (toutes les vues) : '+
-   triSortSelectorsHtml()+triLimitCtlHtml()+
+   triSortSelectorsHtml()+
    '<span style="color:#8fd;font-size:12px">✋ glisse une vignette sur une autre pour la déplacer — au premier déplacement le tri passe en custom et l\'ordre affiché devient la base, mémorisée pour toutes les vues</span>'+
    '</div><div class="triwrap" id="triwrap">';
-  const all=S.portraits.filter(p=>!sexFilter||effSexOf(p.stem)===sexFilter);
-  const list=all.slice(0,triLimit()+_triMore);
-  for(const p of list){
+  for(const p of S.portraits){
+    if(sexFilter&&effSexOf(p.stem)!==sexFilter) continue;
     const ex=S.excluded.includes(p.stem);
     h+='<div class="tcard '+(ex?'keep':'gen')+'" draggable="true" data-stem="'+p.stem+'" '+
       'data-tip="'+p.stem+' · clic : basculer Stylisé / Garder l\'original · glisser : réordonner" '+
@@ -2098,7 +2049,7 @@ function renderTri(){
       '<img class="thumb" loading="lazy" src="/thumb/original/'+p.stem+'">'+
       '<div class="tst">'+(ex?'Garder l\'original':'Stylisé')+'</div></div>';
   }
-  h+='</div>'+triMoreHtml(list.length,all.length);
+  h+='</div>';
   c.innerHTML=h;
   triBindDnD();
 }
@@ -2114,16 +2065,14 @@ function renderTriQual(){
   let h=triTabsHtml();
   h+='<div class="hint" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
     'Qualification des personnages — <b>sexe</b>, <b>cadrage</b> et <b>regard</b>, injectés dans les prompts de toutes les générations. Ordre : '+
-    triSortSelectorsHtml()+triLimitCtlHtml()+
+    triSortSelectorsHtml()+
     '<span class="qcolsw">Images par ligne :'+
     [1,2,3].map(n=>'<button class="'+(cols===n?'on':'')+'" onclick="qualCols('+n+')">'+n+'</button>').join('')+
     '</span></div>'+taggerBarHtml();
   /* les cartes gardent TOUJOURS la largeur du mode 3 colonnes (1/3 de la
      page) ; en 1 ou 2 colonnes l'espace restant est laisse libre a droite */
   h+='<div class="qualgrid" style="grid-template-columns:repeat('+cols+',calc((100% - 20px)/3));justify-content:start">';
-  const qAll=visiblePortraits();
-  const qList=qAll.slice(0,triLimit()+_triMore);
-  for(const p of qList){
+  for(const p of visiblePortraits()){
     const m=S.meta[p.stem]||{};
     const sx=m.sex||'male';
     const frExp=m.framing||''; /* '' = auto */
@@ -2164,7 +2113,7 @@ function renderTriQual(){
         _esc((S.tags&&S.tags[p.stem])||'— pas encore analysé — clic : saisir à la main')+'</div>'+
       '</div></div>';
   }
-  h+='</div>'+triMoreHtml(qList.length,qAll.length);
+  h+='</div>';
   c.innerHTML=h;
   for(const card of c.querySelectorAll('.qcard')){
     const stem=card.dataset.stem;
