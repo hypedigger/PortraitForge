@@ -1957,6 +1957,12 @@ async function progUpdate(){
     if(q.current){
       h+='<div class="pgcur">⚙ En cours : <b>'+q.current+'</b> ⏱'+fmtDur(q.elapsed||0)+
         (q.avg?(' / ~'+fmtDur(q.avg)):'')+'</div>';
+    }else if(q.paused&&q.pending){
+      /* file en pause : le dire clairement (restauree apres redemarrage,
+         mise en pause apres des echecs, ou ComfyUI injoignable) */
+      h+='<div class="pgcur pgpaused">⏸ File en <b>PAUSE</b> — '+q.pending+' génération(s) en attente'+
+        (q.auto_paused?' · ComfyUI injoignable : reprise automatique dès qu\'il répond'
+                      :' <button class="primary" onclick="queueCtl(\'resume\').then(progUpdate)">▶ Reprendre</button>')+'</div>';
     }else{
       h+='<div class="pgcur" style="color:#9ab">Aucune génération en cours</div>';
     }

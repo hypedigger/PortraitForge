@@ -214,9 +214,31 @@ def _ensure_comfy():
 
 
 def _is_conn_error(e):
+    """ComfyUI injoignable ou connexion coupee (pas une erreur du job).
+
+    Volontairement etroit : OSError englobe aussi TimeoutError, fichier
+    introuvable, acces refuse... qui doivent echouer, pas boucler."""
+    import http.client
+    import urllib.error
+    if isinstance(e, (ConnectionError, http.client.RemoteDisconnected)):
+        return True
+    if isinstance(e, urllib.error.URLError) \
+       and not isinstance(e, urllib.error.HTTPError):
+        return not isinstance(getattr(e, "reason", None), TimeoutError)
     msg = str(e).lower()
-    return ("urlopen error" in msg or "10061" in msg or "refus" in msg
-            or "connection" in msg or isinstance(e, (ConnectionError, OSError)))
+    return "10061" in msg or "refus" in msg
+
+
+def _is_timeout(e):
+    import urllib.error
+    return isinstance(e, TimeoutError) or (
+        isinstance(e, urllib.error.URLError)
+        and isinstance(getattr(e, "reason", None), TimeoutError))
+
+
+_RETRY_MAX = 3        # tentatives par job sur erreur transitoire (timeout)
+_FAIL_PAUSE = 3       # echecs consecutifs -> file en pause (manuelle)
+_consec_fail = 0
 
 
 def _trash_png(style, stem, path):
@@ -259,7 +281,7 @@ def _queue_status():
                 "batch_done": _batch_done,
                 "batch_total": _batch_total,
                 "pending_by_style": pby,
-                "paused": _paused}
+                "paused": _paused, "auto_paused": _auto_paused}
 
 
 def _dir_size(path):
@@ -364,7 +386,7 @@ def _enqueue(jobs, front=False):
 
 
 def _worker():
-    global _current, _job_t0, _batch_done, _paused, _auto_paused
+    global _current, _job_t0, _batch_done, _paused, _auto_paused, _consec_fail
     while True:
         if _paused:
             # pause posee par le watchdog : reessayer ComfyUI periodiquement
@@ -424,22 +446,44 @@ def _worker():
             _style_durations.setdefault(job["style"], []).append(
                 time.time() - _job_t0)
             del _style_durations[job["style"]][:-20]
+            _consec_fail = 0
         except Exception as e:
-            if _is_conn_error(e):
-                # connexion ComfyUI perdue EN COURS de job : le job n'est pas
-                # consomme, il repart en tete de file ; pause via watchdog
+            conn = _is_conn_error(e)
+            tries = job.get("_retries", 0)
+            if conn or (_is_timeout(e) and tries < _RETRY_MAX):
+                # erreur transitoire : le job n'est pas consomme, il repart en
+                # tete de file. Coupure ComfyUI -> pause levee par le watchdog
+                # (sans limite : on attend ComfyUI). Timeout -> nombre de
+                # tentatives limite, et la generation bloquee est interrompue.
+                job = dict(job, _retries=tries + (0 if conn else 1))
+                if not conn:
+                    xs.comfy_interrupt()
                 with _queue_lock:
                     _queue.insert(0, job)
                     _current = None
-                _errors.append("connexion ComfyUI perdue — job remis en file")
+                _errors.append(
+                    "connexion ComfyUI perdue — job remis en file" if conn else
+                    "%s/%s : %s — nouvelle tentative %d/%d" % (
+                        job["style"], job["stem"], str(e)[:120],
+                        job["_retries"], _RETRY_MAX))
                 del _errors[:-20]
-                _paused = True
-                _auto_paused = True
+                if conn:
+                    _paused = True
+                    _auto_paused = True
                 _persist_queue()
                 _job_t0 = None
                 continue
             _errors.append("%s/%s : %s" % (job["style"], job["stem"], str(e)[:300]))
             del _errors[:-20]
+            _consec_fail += 1
+            if _consec_fail >= _FAIL_PAUSE:
+                # plusieurs echecs d'affilee : ne pas vider la file en erreurs
+                _paused = True
+                _auto_paused = False
+                _consec_fail = 0
+                _errors.append("%d générations d'affilée en échec — file mise en "
+                               "PAUSE : vérifier ComfyUI puis Reprendre" % _FAIL_PAUSE)
+                del _errors[:-20]
         _batch_done += 1
         _current = None
         _job_t0 = None

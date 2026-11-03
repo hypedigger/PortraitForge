@@ -227,6 +227,18 @@ def comfy_alive():
         return False
 
 
+def comfy_interrupt():
+    """Interrompt la generation en cours dans ComfyUI et vide sa file
+    (avant de retenter un job bloque, pour ne pas l'empiler en double)."""
+    for path, body in (("/interrupt", b"{}"), ("/queue", b'{"clear": true}')):
+        try:
+            req = urllib.request.Request(COMFY_URL + path, data=body,
+                                         headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=10).close()
+        except Exception:
+            pass
+
+
 _model_cache = {}
 
 
