@@ -982,8 +982,95 @@ function showPop(ev,st,stem,kind){
   /* caler pour que le panneau tienne entierement dans l'ecran */
   const ph=pop.offsetHeight;
   pop.style.top=Math.max(8,Math.min(vh-ph-10,r.bottom+8))+'px';
+  popPreviewInit();
 }
 function hidePop(){document.getElementById('pop').style.display='none';popCtx=null;}
+/* ---------- apercu "ce qui sera envoye" (meme code serveur que la generation) ---------- */
+let _ppTimer=null,_ppSeq=0;
+function popPreviewInit(){
+  const sec=document.getElementById('popSendSec');
+  if(!popCtx||!popCtx.stem){sec.style.display='none';return;}
+  sec.style.display='';
+  let closed=false;
+  try{closed=localStorage.getItem('pf_send_closed')==='1';}catch(e){}
+  document.getElementById('popSendBody').style.display=closed?'none':'';
+  document.getElementById('popSendArrow').textContent=closed?'▸':'▾';
+  /* regeneration "chaque style actif" : le prompt de l'artiste varie -> choisir lequel apercevoir */
+  const sel=document.getElementById('popSendStyle');
+  if(popCtx.kind==='perso'){
+    sel.innerHTML=visStyles().map(st=>'<option value="'+st.key+'">'+_esc(st.label)+'</option>').join('');
+    sel.style.display='';
+  }else sel.style.display='none';
+  document.getElementById('popSendBody').innerHTML='<div class="psdim">…</div>';
+  popPreviewRefresh(true);
+}
+function popSendToggle(){
+  const b=document.getElementById('popSendBody');
+  const open=b.style.display==='none';
+  b.style.display=open?'':'none';
+  document.getElementById('popSendArrow').textContent=open?'▾':'▸';
+  try{localStorage.setItem('pf_send_closed',open?'0':'1');}catch(e){}
+}
+function popPreviewRefresh(now){
+  if(!popCtx||!popCtx.stem) return;
+  clearTimeout(_ppTimer);
+  _ppTimer=setTimeout(_popPreviewFetch,now?0:350);
+}
+async function _popPreviewFetch(){
+  if(!popCtx||!popCtx.stem) return;
+  const seq=++_ppSeq;
+  const st=popCtx.kind==='perso'?document.getElementById('popSendStyle').value:popCtx.style;
+  const posEl=document.getElementById('popPos');
+  let r;
+  try{
+    r=await (await fetch('/api/prompt_preview',{method:'POST',body:JSON.stringify({
+      style:st,stem:popCtx.stem,pos:posEl.value,neg:document.getElementById('popNeg').value,
+      no_auto_tags:posEl.dataset.noauto==='1'})})).json();
+  }catch(e){return;}
+  if(seq!==_ppSeq||!popCtx) return; /* reponse perimee */
+  const body=document.getElementById('popSendBody');
+  if(r.error){body.innerHTML='<div class="psdim">'+_esc(r.error)+'</div>';return;}
+  const P=r.parts||{};
+  const toks=s=>(s||'').split(',').map(x=>x.trim()).filter(Boolean);
+  const isCustom=(st==='_custom');
+  const noauto=posEl.dataset.noauto==='1';
+  /* source de chaque mot -> couleur (premiere source qui le revendique) */
+  const src={};
+  const claim=(s,c)=>{for(const t of toks(s)){const k=t.toLowerCase();if(!(k in src)) src[k]=c;}};
+  claim(P.sex&&P.sex.pos,'ps-sex');claim(P.sex&&P.sex.neg,'ps-sex');
+  claim(P.tags,'ps-tag');
+  claim(P.framing&&P.framing.pos,'ps-fr');claim(P.framing&&P.framing.neg,'ps-fr');
+  claim(P.gaze,'ps-gz');
+  claim(P.words&&P.words.pos,'ps-wd');claim(P.words&&P.words.neg,'ps-wd');
+  if(!isCustom){claim(posEl.value,'ps-x');claim(document.getElementById('popNeg').value,'ps-x');}
+  const paint=s=>toks(s).map(t=>{const c=src[t.toLowerCase()];
+    return c?'<span class="'+c+'">'+_esc(t)+'</span>':_esc(t);}).join(', ');
+  const line=(cls,ico,lbl,pos,neg,note)=>'<div class="psrow"><span class="pslbl '+cls+'">'+ico+' '+lbl+'</span>'+
+    '<span class="psval">'+(pos?'<span class="'+cls+'">'+_esc(pos)+'</span>':'<i class="psdim">—</i>')+
+    (neg?' <span class="psneg">⊘ '+_esc(neg)+'</span>':'')+(note?' <span class="psdim">'+note+'</span>':'')+'</span></div>';
+  const frMode={'auto-portrait':'(auto : buste)','auto-full':'(auto : plein pied)',portrait:'(forcé : buste)',
+    full:'(forcé : plein pied)',none:'(aucune directive)',custom:'(custom)'}[(P.framing||{}).mode]||'';
+  let h='<div class="pslist">';
+  h+=line('ps-sex','⚥','Sexe',P.sex&&P.sex.pos,P.sex&&P.sex.neg);
+  h+=line('ps-tag','🏷','Tags auto',noauto?'':P.tags,'',
+    !P.tags_enabled?'(désactivés dans les Options)':noauto?'(repris dans le champ positif ci-dessus)':'');
+  h+=line('ps-fr','🖼','Cadrage',P.framing&&P.framing.pos,P.framing&&P.framing.neg,frMode);
+  h+=line('ps-gz','👁','Regard',P.gaze,'',P.gaze?'':'(aucune directive)');
+  h+=line('ps-wd','👤','Mots du perso',P.words&&P.words.pos,P.words&&P.words.neg);
+  if(!isCustom) h+=line('ps-x','✎','Tes ajouts',posEl.value.trim(),document.getElementById('popNeg').value.trim());
+  h+='<div class="psrow"><span class="pslbl">🎨 '+(isCustom?'Prompt custom':'Artiste')+'</span>'+
+    '<span class="psval psdim">'+(isCustom?'ton prompt (ou celui par défaut)':'préfixe qualité + prompt de l\'artiste + suffixe du jeu')+' — en gris ci-dessous</span></div>';
+  h+='</div>';
+  h+='<div class="pfrow"><span style="color:#8fd">positif final</span><button onclick="popSendCopy(\'pos\')" title="copier le prompt positif final">📋 copier</button></div>'+
+    '<div class="popfull psfinal" id="popSendPos">'+paint(r.positive)+'</div>'+
+    '<div class="pfrow"><span style="color:#f99">négatif final</span><button onclick="popSendCopy(\'neg\')" title="copier le prompt négatif final">📋 copier</button></div>'+
+    '<div class="popfull psfinal" id="popSendNeg">'+paint(r.negative)+'</div>';
+  body.innerHTML=h;
+}
+function popSendCopy(w){
+  const el=document.getElementById(w==='neg'?'popSendNeg':'popSendPos');
+  navigator.clipboard.writeText(el.textContent).then(()=>toast(T('📋 Prompt copié dans le presse-papiers'))).catch(()=>{});
+}
 /* section repliable "prompt complet" du popup Regenerer (lecture seule) */
 function popFullToggle(){
   const b=document.getElementById('popFullBody');
@@ -1032,6 +1119,7 @@ function applyUserPreset(name){
   delete document.getElementById('popPos').dataset.noauto; /* mots de preset = extras */
   /* application ponctuelle : ne pas memoriser dans le style par accident */
   document.getElementById('popMemo').checked=false;
+  popPreviewRefresh(true);
 }
 async function saveUserPreset(){
   const name=(prompt(T('Nom du preset :'))||'').trim();
@@ -1069,6 +1157,7 @@ async function saveWords(){
   S.words=S.words||{};
   if(pos||neg) S.words[stem]={pos:pos,neg:neg}; else delete S.words[stem];
   toast('💾 Mots du personnage enregistrés — ajoutés à toutes ses futures générations');
+  popPreviewRefresh(true);
 }
 /* case "meme seed" : reprendre / relacher la seed de l'image consultee */
 function popSeedReuseToggle(){
@@ -2924,6 +3013,7 @@ function popApplyGenParams(gp){
   }
   /* relance ponctuelle : ne pas memoriser ces valeurs dans le style */
   document.getElementById('popMemo').checked=false;
+  popPreviewRefresh(true); /* champ positif pre-rempli + tags auto non reinjectes */
 }
 async function lbRegen(ev){
   if(!lbCtx) return;

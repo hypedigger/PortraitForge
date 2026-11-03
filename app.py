@@ -1313,6 +1313,16 @@ class Handler(BaseHTTPRequestHandler):
                 words.pop(stem, None)
             xs.save_portrait_words(words)
             self._json({"ok": True})
+        elif p == "/api/prompt_preview":
+            # prompts exacts qui seraient envoyes (memes fonctions que la
+            # generation) + detail par source, sans rien generer
+            try:
+                self._json(xs.preview_prompts(
+                    body.get("style") or "", body.get("stem") or "",
+                    body.get("pos") or "", body.get("neg") or "",
+                    auto_tags=not body.get("no_auto_tags")))
+            except Exception as e:
+                self._json({"error": str(e)[:200]}, 400)
         elif p == "/api/tags":
             # edition manuelle des tags d'un personnage (onglet Qualification)
             tags = xs.load_portrait_tags()

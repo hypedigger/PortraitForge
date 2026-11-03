@@ -166,6 +166,20 @@ button.primary:hover{background:linear-gradient(135deg,#10b981,#14b8a6);box-shad
 .pfrow{display:flex;align-items:center;justify-content:space-between;font-size:12px;margin-top:5px}
 .pfrow button{padding:2px 8px;font-size:11px}
 .pfx{color:#ffd27f} /* mots propres a l'image (hors prompt de base du style) */
+/* apercu "ce qui sera envoye" : une couleur par source de mots */
+#popSendSec{border-top:1px dashed #39404f;margin-top:8px;padding-top:6px}
+.psshead{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.psshead select{max-width:180px;font-size:12px;padding:3px 6px}
+.pslist{background:#151a26;border:1px solid #2b3350;border-radius:8px;padding:6px 8px;margin:5px 0}
+.psrow{display:flex;gap:8px;font-size:12px;line-height:1.5;padding:1px 0}
+.pslbl{width:112px;flex-shrink:0;font-weight:600}
+.psval{flex:1;min-width:0;word-break:break-word;color:#cdd6e8}
+.psneg{color:#f9a8a8;opacity:.85}
+.psdim{color:#7a869f;font-style:normal}
+.psfinal{color:#7a869f;max-height:190px}
+.ps-sex{color:#f9a8d4}.ps-tag{color:#93c5fd}.ps-fr{color:#c4b5fd}
+.ps-gz{color:#5eead4}.ps-wd{color:#fcd34d}.ps-x{color:#86efac}
+.pslbl.ps-sex,.pslbl.ps-tag,.pslbl.ps-fr,.pslbl.ps-gz,.pslbl.ps-wd,.pslbl.ps-x{filter:brightness(1.05)}
 .pflegend{font-size:11px;color:#9ab;margin:2px 0 4px}
 
 /* ---- matrice ---- */

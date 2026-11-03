@@ -621,6 +621,75 @@ def _dedup_prompt(p):
     return ", ".join(out)
 
 
+def compose_prompts(cfgset, stem, pos_extra=None, neg_extra=None,
+                    auto_tags=True, app_s=None):
+    """Compose les prompts FINAUX d'un personnage a partir du prompt de base
+    deja dans cfgset (style ou Custom). Utilisee par la generation ET par
+    l'apercu du popup : ce qui est affiche est exactement ce qui est envoye.
+
+    auto_tags=False : les tags sont deja dans les mots du popup (regeneration
+    pre-remplie) -> ce que l'utilisateur y laisse fait foi."""
+    if app_s is None:
+        app_s = load_app_settings()
+    if pos_extra and pos_extra.strip():
+        cfgset["positive"] += ", " + pos_extra.strip()
+    if neg_extra and neg_extra.strip():
+        cfgset["negative"] += ", " + neg_extra.strip()
+    _apply_framing(cfgset, stem)
+    _apply_gaze(cfgset, stem)
+    _apply_portrait_words(cfgset, stem)
+    sex_pos, sex_neg = portrait_prompt_tags(stem)
+    head = sex_pos
+    if app_s.get("use_auto_tags", True) and auto_tags:
+        char_tags = load_portrait_tags().get(stem, "")
+        if char_tags:
+            head = (head + ", " + char_tags) if head else char_tags
+    if head:
+        cfgset["positive"] = head + ", " + cfgset["positive"]
+    if sex_neg:
+        cfgset["negative"] = cfgset["negative"] + ", " + sex_neg
+    cfgset["positive"] = _dedup_prompt(cfgset["positive"])
+    cfgset["negative"] = _dedup_prompt(cfgset["negative"])
+    return cfgset
+
+
+def prompt_parts(stem, auto_tags=True):
+    """Detail par source des mots ajoutes pour un personnage (apercu UI)."""
+    app_s = load_app_settings()
+    sex_pos, sex_neg = portrait_prompt_tags(stem)
+    fr_pos, fr_neg, fr_mode = framing_words(stem)
+    w = load_portrait_words().get(stem) or {}
+    tags = ""
+    if app_s.get("use_auto_tags", True) and auto_tags:
+        tags = load_portrait_tags().get(stem, "")
+    return {"sex": {"pos": sex_pos, "neg": sex_neg},
+            "tags": tags,
+            "tags_enabled": bool(app_s.get("use_auto_tags", True)),
+            "framing": {"pos": fr_pos, "neg": fr_neg, "mode": fr_mode},
+            "gaze": gaze_words(stem),
+            "words": {"pos": (w.get("pos") or "").strip(" ,"),
+                      "neg": (w.get("neg") or "").strip(" ,")}}
+
+
+def preview_prompts(style_key, stem, pos_extra="", neg_extra="", auto_tags=True):
+    """Prompts finaux qui seraient envoyes pour (style, perso), sans generer."""
+    styles_cfg = load_styles()
+    if style_key == CUSTOM_KEY:
+        cfgset = {"positive": (pos_extra or "").strip()
+                  or "portrait, upper body, solo, detailed face",
+                  "negative": (neg_extra or "").strip()
+                  or "worst quality, low quality, jpeg artifacts, watermark, text"}
+        base_pos, base_neg = cfgset["positive"], cfgset["negative"]
+        compose_prompts(cfgset, stem)
+    else:
+        cfgset = build_cfgset(styles_cfg, style_key)
+        base_pos, base_neg = cfgset["positive"], cfgset["negative"]
+        compose_prompts(cfgset, stem, pos_extra, neg_extra, auto_tags=auto_tags)
+    return {"positive": cfgset["positive"], "negative": cfgset["negative"],
+            "base_pos": base_pos, "base_neg": base_neg,
+            "parts": prompt_parts(stem, auto_tags)}
+
+
 def generate_variant(styles_cfg, style_key, portrait, seed=None, denoise=None,
                      pos_extra=None, neg_extra=None, boost=False,
                      lora_strength=None, cnet_strength=None, cnet_end=None,
@@ -649,27 +718,8 @@ def generate_variant(styles_cfg, style_key, portrait, seed=None, denoise=None,
         cfgset["cnet_strength"] = float(cnet_strength)
     if cnet_end is not None:
         cfgset["cnet_end"] = float(cnet_end)
-    if pos_extra and pos_extra.strip():
-        cfgset["positive"] += ", " + pos_extra.strip()
-    if neg_extra and neg_extra.strip():
-        cfgset["negative"] += ", " + neg_extra.strip()
-    _apply_framing(cfgset, portrait["stem"])
-    _apply_gaze(cfgset, portrait["stem"])
-    _apply_portrait_words(cfgset, portrait["stem"])
-    pos_extra, neg_extra = portrait_prompt_tags(portrait["stem"])
-    char_tags = ""
-    # auto_tags=False : les tags sont deja dans les mots du popup (regeneration
-    # pre-remplie) -> ce que l'utilisateur y laisse fait foi
-    if app_s.get("use_auto_tags", True) and auto_tags:
-        char_tags = load_portrait_tags().get(portrait["stem"], "")
-    if char_tags:
-        pos_extra = (pos_extra + ", " + char_tags) if pos_extra else char_tags
-    if pos_extra:
-        cfgset["positive"] = pos_extra + ", " + cfgset["positive"]
-    if neg_extra:
-        cfgset["negative"] = cfgset["negative"] + ", " + neg_extra
-    cfgset["positive"] = _dedup_prompt(cfgset["positive"])
-    cfgset["negative"] = _dedup_prompt(cfgset["negative"])
+    compose_prompts(cfgset, portrait["stem"], pos_extra, neg_extra,
+                    auto_tags=auto_tags, app_s=app_s)
     rgb, alpha = prepare_input(portrait["path"], cfgset["size"])
     cfgset["width"], cfgset["height"] = rgb.size
     up_name = upload_image(rgb, "xenostyle_%s.png" % portrait["stem"])
@@ -736,19 +786,7 @@ def generate_custom(portrait, opts):
         "cnet_type": app_s.get("cnet_type") or "canny",
         "controlnet": resolve_model("controlnet", CONTROLNET_NAME_HINT),
     }
-    _apply_portrait_words(cfgset, stem)
-    pos_extra, neg_extra = portrait_prompt_tags(stem)
-    char_tags = ""
-    if app_s.get("use_auto_tags", True):
-        char_tags = load_portrait_tags().get(stem, "")
-    if char_tags:
-        pos_extra = (pos_extra + ", " + char_tags) if pos_extra else char_tags
-    if pos_extra:
-        cfgset["positive"] = pos_extra + ", " + cfgset["positive"]
-    if neg_extra:
-        cfgset["negative"] += ", " + neg_extra
-    cfgset["positive"] = _dedup_prompt(cfgset["positive"])
-    cfgset["negative"] = _dedup_prompt(cfgset["negative"])
+    compose_prompts(cfgset, stem, app_s=app_s)
     # source de l'img2img
     src = opts.get("source")
     src_path = portrait["path"]
@@ -763,8 +801,6 @@ def generate_custom(portrait, opts):
         pick = sel if sel in files else (files[-1] if files else None)
         if pick:
             src_path = os.path.join(STYLIZED_DIR, CUSTOM_KEY, stem, pick)
-    _apply_framing(cfgset, stem)
-    _apply_gaze(cfgset, stem)
     rgb, alpha = prepare_input(src_path, cfgset["size"])
     cfgset["width"], cfgset["height"] = rgb.size
     up_name = upload_image(rgb, "xenostyle_%s.png" % stem)
@@ -892,26 +928,32 @@ def portrait_framing(stem):
     return cache[stem]
 
 
-def _apply_framing(cfgset, stem):
-    """Remplace les termes de cadrage du prompt par ceux du cadrage effectif.
+def framing_words(stem):
+    """(mots positifs, mots negatifs, mode) du cadrage effectif d'un perso.
 
     meta.framing : 'portrait' / 'full' (force), 'none' (aucune directive),
-    'custom' (texte libre meta.framing_text), absent = auto-detection."""
+    'custom' (texte libre meta.framing_text), absent = auto-detection
+    (mode 'auto-portrait' / 'auto-full')."""
     meta = load_portrait_meta().get(stem) or {}
     f = meta.get("framing")
+    if f == "none":
+        return "", "", "none"
+    if f == "custom":
+        return (meta.get("framing_text") or "").strip(" ,"), "", "custom"
+    fr = portrait_framing(stem)
+    return FRAMING_POS[fr], FRAMING_NEG[fr], (fr if f else "auto-" + fr)
+
+
+def _apply_framing(cfgset, stem):
+    """Remplace les termes de cadrage du prompt par ceux du cadrage effectif."""
+    pos, neg, _mode = framing_words(stem)
     toks = [t.strip() for t in cfgset["positive"].split(",")]
     toks = [t for t in toks if t and t.lower() not in _FRAMING_TOKENS]
     cfgset["positive"] = ", ".join(toks)
-    if f == "none":
-        return
-    if f == "custom":
-        txt = (meta.get("framing_text") or "").strip(" ,")
-        if txt:
-            cfgset["positive"] += ", " + txt
-        return
-    fr = portrait_framing(stem)
-    cfgset["positive"] += ", " + FRAMING_POS[fr]
-    cfgset["negative"] += ", " + FRAMING_NEG[fr]
+    if pos:
+        cfgset["positive"] += ", " + pos
+    if neg:
+        cfgset["negative"] += ", " + neg
 
 
 # ------------------------------------------------- regard par portrait
@@ -923,18 +965,22 @@ _GAZE_TOKENS = {"looking ahead", "looking at viewer"}
 _GAZE_WORDS = {"viewer": "looking at viewer", "ahead": "looking ahead"}
 
 
-def _apply_gaze(cfgset, stem):
+def gaze_words(stem):
+    """Mots de regard ajoutes au prompt pour un perso ('' = aucune directive)."""
     meta = load_portrait_meta().get(stem) or {}
     g = meta.get("gaze") or ""
+    if g == "custom":
+        return (meta.get("gaze_text") or "").strip(" ,")
+    return _GAZE_WORDS.get(g, "")
+
+
+def _apply_gaze(cfgset, stem):
+    words = gaze_words(stem)
     toks = [t.strip() for t in cfgset["positive"].split(",")]
     toks = [t for t in toks if t and t.lower() not in _GAZE_TOKENS]
     cfgset["positive"] = ", ".join(toks)
-    if g == "custom":
-        txt = (meta.get("gaze_text") or "").strip(" ,")
-        if txt:
-            cfgset["positive"] += ", " + txt
-    elif g in _GAZE_WORDS:
-        cfgset["positive"] += ", " + _GAZE_WORDS[g]
+    if words:
+        cfgset["positive"] += ", " + words
 
 
 def _apply_portrait_words(cfgset, stem):
