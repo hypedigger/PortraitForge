@@ -61,6 +61,9 @@ const PF_I18N_EN = {
   "positif final": "final positive", "négatif final": "final negative",
   "copier le prompt positif final": "copy the final positive prompt",
   "copier le prompt négatif final": "copy the final negative prompt",
+  "Afficher :": "Show:", "tout": "all", "custom…": "custom…",
+  "nombre d'images affichées dans le mur (les plus récentes d'abord)": "number of images shown on the wall (most recent first)",
+  "0 = toutes les images": "0 = all images",
   "🏷 Analyser les nouvelles textures": "🏷 Analyze new textures",
   "⟳ Tout réanalyser": "⟳ Re-analyze everything",
   "Les portraits ont déjà été analysés : ce bouton n'analyse QUE les textures jamais analysées (nouvelles textures ajoutées au jeu). Les tags existants — y compris ceux modifiés à la main dans Qualification — ne sont pas touchés. Pour tout recalculer, utilise « Tout réanalyser ».":
@@ -471,6 +474,7 @@ const PF_I18N_RULES = [
    "character tags (auto-detected, injected into all its prompts) · click: edit — full list: $1"],
   [/^préfixe qualité \+ prompt de l'artiste \+ suffixe du jeu — en gris ci-dessous$/, "quality prefix + artist prompt + game suffix — in grey below"],
   [/^ton prompt \(ou celui par défaut\) — en gris ci-dessous$/, "your prompt (or the default one) — in grey below"],
+  [/^(\d+) \/ (\d+) images$/, "$1 / $2 images"],
   [/^✓ déjà analysés \((\d+)\)$/, "✓ already analyzed ($1)"],
   [/^🔍 Analyse$/, "🔍 Analyzing"],
   [/^nouvelles : (\d+) · tags modifiés : (\d+)$/, "new: $1 · tags changed: $2"],

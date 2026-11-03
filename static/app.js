@@ -1462,7 +1462,7 @@ function optOpen(){
   document.getElementById('optCfgIl').value=s.cfg_illustrious||'';
   document.getElementById('optCnetType').value=s.cnet_type||'canny';
   document.getElementById('optResize').checked=(s.resize_export!==false);
-  document.getElementById('optWall').value=s.wall_size||60;
+  document.getElementById('optWall').value=(s.wall_size===0)?0:(s.wall_size||100);
   document.getElementById('optAutoTags').checked=(s.use_auto_tags!==false);
   document.getElementById('optTagThr').value=s.tag_threshold||0.35;
   document.getElementById('optAntiHalo').checked=(s.anti_halo!==false);
@@ -1573,7 +1573,7 @@ async function optSave(){
     checkpoint_illustrious:document.getElementById('optCkptIl').value||'',
     cnet_type:document.getElementById('optCnetType').value||'canny',
     resize_export:document.getElementById('optResize').checked,
-    wall_size:Math.max(10,Math.min(500,+document.getElementById('optWall').value||60)),
+    wall_size:(v=>v===0?0:Math.max(1,Math.min(20000,v||100)))(+document.getElementById('optWall').value),
     use_auto_tags:document.getElementById('optAutoTags').checked,
     tag_threshold:+document.getElementById('optTagThr').value||0.35,
     anti_halo:document.getElementById('optAntiHalo').checked,
@@ -1835,11 +1835,45 @@ function renderProg(){
     '<div id="progHealth" class="pghealth">🩺 …</div>'+
     '<div id="progQueue" class="progq">chargement…</div>'+
     '<h3 class="progh">Dernières images générées <span style="font-size:12px;color:#9ab;font-weight:normal">(clic = fiche du perso, clic droit = zoom)</span> '+
-    '<button onclick="openDir(\'stylized\')" style="font-size:12px;padding:5px 10px" title="ouvrir le répertoire des images générées dans l\'explorateur">📂 Ouvrir le dossier des images</button></h3>'+
+    '<button onclick="openDir(\'stylized\')" style="font-size:12px;padding:5px 10px" title="ouvrir le répertoire des images générées dans l\'explorateur">📂 Ouvrir le dossier des images</button>'+
+    wallLimitCtlHtml()+'<span id="wallCount" class="wallcnt"></span></h3>'+
     '<div id="progWall" class="progwall"></div></div>';
   _progWallKey='';
   progUpdate();
   progHealth();
+}
+/* nombre d'images du mur Generation (reglage wall_size, 100 par defaut, 0 = tout) */
+function wallSize(){
+  const v=S&&S.settings?S.settings.wall_size:100;
+  return (v===0)?0:(+v>0?+v:100);
+}
+function wallLimitCtlHtml(){
+  const v=wallSize();
+  const preset=[50,100,200,500,0];
+  const isCustom=!preset.includes(v);
+  return '<span class="walllim" title="nombre d\'images affichées dans le mur (les plus récentes d\'abord)">Afficher : '+
+    '<select onchange="wallLimitSelect(this.value)">'+
+    preset.map(n=>'<option value="'+n+'"'+(!isCustom&&v===n?' selected':'')+'>'+(n?n:'tout')+'</option>').join('')+
+    '<option value="custom"'+(isCustom?' selected':'')+'>custom…</option></select>'+
+    '<input id="wallLimCustom" type="number" min="1" step="10" value="'+(isCustom?v:'')+'" placeholder="ex: 150" '+
+    'style="display:'+(isCustom?'inline-block':'none')+'" onchange="wallLimitSet(this.value)"></span>';
+}
+function wallLimitSelect(v){
+  if(v==='custom'){
+    const inp=document.getElementById('wallLimCustom');
+    inp.style.display='inline-block';inp.focus();
+    return;
+  }
+  wallLimitSet(v);
+}
+async function wallLimitSet(v){
+  if(String(v).trim()==='') return;
+  const n=Math.max(0,parseInt(v,10)||0);
+  if(n===0&&String(v).trim()!=='0') return;
+  (S.settings=S.settings||{}).wall_size=n;
+  await fetch('/api/settings',{method:'POST',body:JSON.stringify({wall_size:n})});
+  _progWallKey='';
+  progUpdate();
 }
 /* volet sante : etat ComfyUI, VRAM, temps moyens par style, caches */
 async function progHealth(){
@@ -1933,7 +1967,9 @@ async function progUpdate(){
     if(q.errors&&q.errors.length){
       h+='<div class="pgerr">Dernières erreurs :<br>'+q.errors.slice(-3).join('<br>')+'</div>';
     }
-    const r=await (await fetch('/api/recent?n='+(((S.settings||{}).wall_size)||60))).json();
+    const r=await (await fetch('/api/recent?n='+wallSize())).json();
+    const wc=document.getElementById('wallCount');
+    if(wc&&r.total!=null) wc.textContent=Math.min(r.items.length,r.total)+' / '+r.total+' images';
     if(r.counts){
       h+='<div class="pgpend">🖼 Images générées : <b>'+r.counts.minute+
         '</b> depuis 1 min · <b>'+r.counts.hour+'</b> depuis 1 h · <b>'+r.counts.day+'</b> depuis 24 h</div>';

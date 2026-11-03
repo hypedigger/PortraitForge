@@ -51,7 +51,7 @@ DEFAULT_SETTINGS = {"regen_count": 2, "hidden_styles": [],
                     "checkpoint_pony": "", "checkpoint_illustrious": "",
                     "cnet_type": "canny", "resize_export": True,
                     "use_auto_tags": True, "tag_threshold": 0.35,
-                    "anti_halo": True, "pack_backup": True, "wall_size": 60,
+                    "anti_halo": True, "pack_backup": True, "wall_size": 100,
                     "sort_portraits": "date", "sort_secondary": "date",
                     "lb_dense": False, "lb_bg": "grey", "notify_done": False,
                     "lang": "fr", "user_presets": {},
@@ -741,9 +741,11 @@ class Handler(BaseHTTPRequestHandler):
                     counts["hour"] += 1
                 if age <= 60:
                     counts["minute"] += 1
+            # n = 0 : toutes les images
+            keep = items if n <= 0 else items[:min(n, 20000)]
             self._json({"items": [{"style": s, "stem": st, "file": f, "mtime": m}
-                                  for m, s, st, f in items[:max(1, min(500, n))]],
-                        "counts": counts})
+                                  for m, s, st, f in keep],
+                        "total": len(items), "counts": counts})
         elif p.startswith("/api/fmtime"):
             # date de generation d'une variante (mtime du fichier)
             q = urllib.parse.parse_qs(urllib.parse.urlparse(p).query)
