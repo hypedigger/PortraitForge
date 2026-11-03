@@ -3041,16 +3041,38 @@ function popApplyGenParams(gp){
   const _tokSet=s=>new Set((s||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean));
   const _toks=s=>(s||'').split(',').map(x=>x.trim()).filter(Boolean);
   const bp=_tokSet(gp.base_pos);
-  /* champ positif : pre-rempli avec TOUS les mots propres a l'image ; le
-     drapeau noauto evite que les tags auto soient reinjectes en plus */
-  if(gp.base_pos&&gp.positive){
-    /* le regard est pilote par le bouton 👁 du personnage, pas par le champ */
-    const gzTok=new Set(['looking ahead','looking at viewer']);
-    document.getElementById('popPos').value=
-      _toks(gp.positive).filter(t=>!bp.has(t.toLowerCase())&&!gzTok.has(t.toLowerCase())).join(', ');
-    document.getElementById('popPos').dataset.noauto='1';
-  }else document.getElementById('popPos').value=gp.pos_extra||'';
-  document.getElementById('popNeg').value=gp.neg_extra||'';
+  /* champs +/− : seulement les mots AJOUTES A LA MAIN lors de la generation
+     de cette image. Tout ce qui est automatique (sexe, tags auto, cadrage,
+     regard, mots du perso) est reinjecte a chaque generation et visible dans
+     l'apercu "ce qui sera envoye" : on le retire des champs. */
+  const posEl=document.getElementById('popPos'), negEl=document.getElementById('popNeg');
+  delete posEl.dataset.noauto;
+  const imgPos=(gp.base_pos&&gp.positive)
+    ?_toks(gp.positive).filter(t=>!bp.has(t.toLowerCase()))
+    :_toks(gp.pos_extra);
+  const imgNeg=_toks(gp.neg_extra);
+  /* champs vides le temps du filtrage (pas de clignotement des mots auto) ;
+     sans perso ou si l'apercu echoue : mots de l'image non filtres */
+  const fallback=()=>{posEl.value=imgPos.join(', ');negEl.value=imgNeg.join(', ');};
+  posEl.value='';negEl.value='';
+  if(!(popCtx&&popCtx.stem)) fallback();
+  if(popCtx&&popCtx.stem){
+    const ctx=popCtx;
+    fetch('/api/prompt_preview',{method:'POST',body:JSON.stringify({style:ctx.style,stem:ctx.stem})})
+      .then(r=>r.json()).then(pv=>{
+        if(popCtx!==ctx||!pv||!pv.parts) return; /* popup ferme / change entre-temps */
+        const P=pv.parts;
+        /* mots auto actuels + termes de cadrage/regard (pilotes par la Qualification,
+           y compris ceux d'anciennes images generees avec d'autres reglages) */
+        const autoPos=_tokSet([P.sex&&P.sex.pos,P.tags,P.framing&&P.framing.pos,P.gaze,P.words&&P.words.pos,
+          'portrait, upper body, full body, standing, head to toe, feet out of frame, looking ahead, looking at viewer'].join(','));
+        const autoNeg=_tokSet([P.sex&&P.sex.neg,P.framing&&P.framing.neg,P.words&&P.words.neg,
+          'full body, portrait, close-up, cropped legs, 1boy, male focus, 1girl, female'].join(','));
+        posEl.value=imgPos.filter(t=>!autoPos.has(t.toLowerCase())).join(', ');
+        negEl.value=imgNeg.filter(t=>!autoNeg.has(t.toLowerCase())).join(', ');
+        popPreviewRefresh(true);
+      }).catch(()=>{if(popCtx===ctx) fallback();});
+  }
   /* prompt complet de l'image (lecture seule, replie par defaut) : mots
      propres a l'image surlignes par rapport au prompt de base du style */
   if(gp.positive){
