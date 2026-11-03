@@ -108,7 +108,10 @@ button.primary:hover{background:linear-gradient(135deg,#10b981,#14b8a6);box-shad
 #dnexpl{font-size:12px;color:#cde;background:#181c22;border-radius:8px;padding:7px 9px;margin:8px 0}
 .qty{display:flex;align-items:center;gap:8px;margin:6px 0}
 .qty input{width:60px;text-align:center}
-#pop .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+/* boutons Annuler / Generer : toujours visibles en bas, le contenu defile dessus */
+#pop .actions{display:flex;gap:8px;justify-content:flex-end;margin:8px -16px -14px;
+ position:sticky;bottom:-14px;z-index:3;padding:10px 16px 12px;
+ background:#20242c;border-top:1px solid #39404f;border-radius:0 0 12px 12px}
 /* ---- Tri : barre d'analyse des portraits (tagger) ---- */
 .tagbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 12px 8px}
 .tagbar button.tagall{border-color:#f59e0b55;color:#fcd34d}
