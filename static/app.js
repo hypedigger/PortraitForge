@@ -985,6 +985,26 @@ function showPop(ev,st,stem,kind){
   popPreviewInit();
 }
 function hidePop(){document.getElementById('pop').style.display='none';popCtx=null;}
+/* taille du popup redimensionne a la poignee : memorisee et reappliquee
+   (le redimensionnement CSS ecrit width/height en style inline) */
+(function(){
+  const pop=document.getElementById('pop');
+  try{
+    const sz=JSON.parse(localStorage.getItem('pf_pop_size')||'null');
+    if(sz&&sz.w) pop.style.width=Math.min(sz.w,innerWidth-16)+'px';
+    if(sz&&sz.h) pop.style.height=sz.h+'px';
+  }catch(e){}
+  /* fin d'un redimensionnement a la poignee = relachement de la souris */
+  let last=pop.style.width+'|'+pop.style.height;
+  document.addEventListener('mouseup',()=>{
+    if(pop.style.display!=='block'||!pop.style.width) return;
+    const cur=pop.style.width+'|'+pop.style.height;
+    if(cur===last) return;
+    last=cur;
+    try{localStorage.setItem('pf_pop_size',JSON.stringify({
+      w:parseInt(pop.style.width,10)||null,h:parseInt(pop.style.height,10)||null}));}catch(e){}
+  });
+})();
 /* ---------- apercu "ce qui sera envoye" (meme code serveur que la generation) ---------- */
 let _ppTimer=null,_ppSeq=0;
 function popPreviewInit(){
