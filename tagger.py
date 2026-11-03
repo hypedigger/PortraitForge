@@ -11,6 +11,7 @@ import argparse
 import csv
 import json
 import os
+import time
 import urllib.request
 
 import numpy as np
@@ -120,6 +121,19 @@ def _sync_gaze_closed_eyes(cur, tag_str):
     return None
 
 
+PROGRESS_FILE = os.path.join(os.path.dirname(TAGS_FILE), "tagger_progress.json")
+
+
+def _progress(**kw):
+    """Etat de l'analyse lu par l'UI (/api/tagger_status)."""
+    try:
+        with open(PROGRESS_FILE + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(kw, f, ensure_ascii=False)
+        os.replace(PROGRESS_FILE + ".tmp", PROGRESS_FILE)
+    except OSError:
+        pass
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stem", default=None)
@@ -136,6 +150,7 @@ def main():
         with open(TAGS_FILE, "r", encoding="utf-8") as f:
             existing = json.load(f)
 
+    _progress(phase="model", done=0, total=0, force=args.force)
     sess, tags = load_model()
     portraits = xs.list_portraits()
     if args.stem:
@@ -144,17 +159,25 @@ def main():
         meta = xs.load_portrait_meta()
         portraits = [p for p in portraits
                      if (meta.get(p["stem"]) or {}).get("sex", "male") == args.sex]
+    # sans --force : seules les textures jamais analysees (nouvelles)
+    todo = [p for p in portraits if args.force or p["stem"] not in existing]
     closed_seen = {}  # detection de ce run (le tag ne va PAS dans la liste)
-    for i, p in enumerate(portraits):
-        if p["stem"] in existing and not args.force:
-            continue
+    n_new = n_changed = 0
+    for i, p in enumerate(todo):
+        _progress(phase="tag", done=i, total=len(todo), current=p["stem"],
+                  new=n_new, changed=n_changed, force=args.force)
+        before = existing.get(p["stem"])
         found = tag_image(sess, tags, p["path"], args.threshold)
         closed_seen[p["stem"]] = "closed eyes" in found
         # le regard est porte par meta.gaze (custom "closed eyes") : on ne le
         # duplique pas dans la liste de tags du personnage
         found = [t for t in found if t != "closed eyes"]
         existing[p["stem"]] = ", ".join(found)
-        print("[%d/%d] %s -> %s" % (i + 1, len(portraits), p["stem"],
+        if before is None:
+            n_new += 1
+        elif before != existing[p["stem"]]:
+            n_changed += 1
+        print("[%d/%d] %s -> %s" % (i + 1, len(todo), p["stem"],
                                     existing[p["stem"]]))
         with open(TAGS_FILE, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=1, ensure_ascii=False)
@@ -195,6 +218,10 @@ def main():
     if n_gaze:
         xs.save_portrait_meta(meta)
     print("Regard 'closed eyes' : %d modification(s)" % n_gaze)
+    _progress(phase="done", done=len(todo), total=len(todo), new=n_new,
+              changed=n_changed, unchanged=len(todo) - n_new - n_changed,
+              gaze=n_gaze, all=len(existing), force=args.force,
+              finished=time.time())
 
 
 if __name__ == "__main__":

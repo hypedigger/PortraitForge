@@ -1935,6 +1935,7 @@ function triTabsHtml(){
     'title="sexe, cadrage et regard de chaque personnage (injectés dans les prompts)">🏷 Qualification</button></div>';
 }
 function renderTri(){
+  if(_tagSt===null) taggerPoll(); /* reprendre le suivi d'une analyse en cours (F5) */
   if(triTab==='qual'){renderTriQual();return;}
   const c=document.getElementById('content');
   const sortMode=(S.settings&&S.settings.sort_portraits)||'date';
@@ -1944,9 +1945,7 @@ function renderTri(){
    '<b style="color:#8fc">Stylisé</b> = sera régénéré dans les styles / '+
    '<b style="color:#fc8">Garder l\'original</b> = texture non-personnage, laissée telle quelle '+
    '(ignorée des autres vues, de la génération et de l\'export). '+
-   '<button id="btnTagger" onclick="runTagger()" title="détecte couleurs de cheveux/yeux, lunettes, casques... injectés dans les prompts pour la fidélité (~1-2 min, en arrière-plan)">🏷 Analyser les portraits (tags auto)</button>'+
-   (S.tags_done?' <span style="color:#4c4">✓ déjà analysés</span>':'')+
-   '</div>'+
+   '</div>'+taggerBarHtml()+
    '<div class="hint" style="display:flex;gap:10px;align-items:center">Ordre des portraits (toutes les vues) : '+
    triSortSelectorsHtml()+
    '<span style="color:#8fd;font-size:12px">✋ glisse une vignette sur une autre pour la déplacer — au premier déplacement le tri passe en custom et l\'ordre affiché devient la base, mémorisée pour toutes les vues</span>'+
@@ -1979,7 +1978,7 @@ function renderTriQual(){
     triSortSelectorsHtml()+
     '<span class="qcolsw">Images par ligne :'+
     [1,2,3].map(n=>'<button class="'+(cols===n?'on':'')+'" onclick="qualCols('+n+')">'+n+'</button>').join('')+
-    '</span></div>';
+    '</span></div>'+taggerBarHtml();
   /* les cartes gardent TOUJOURS la largeur du mode 3 colonnes (1/3 de la
      page) ; en 1 ou 2 colonnes l'espace restant est laisse libre a droite */
   h+='<div class="qualgrid" style="grid-template-columns:repeat('+cols+',calc((100% - 20px)/3));justify-content:start">';
@@ -2120,19 +2119,88 @@ async function triDrop(target){
   render();
   await fetch('/api/order',{method:'POST',body:JSON.stringify({order:stems})});
 }
-async function runTagger(){
-  const r=await (await fetch('/api/tagger_run',{method:'POST',body:'{}'})).json();
-  if(r.ok){toast('🏷 Analyse des portraits lancée en arrière-plan (~1-2 min)');taggerPoll();}
-  else toast(r.error||'erreur');
+/* ---------- analyse des portraits (tagger) : boutons + progression ---------- */
+let _tagSt=null;      /* dernier /api/tagger_status */
+let _tagWatch=false;  /* une analyse lancee/suivie dans cette session */
+let _tagPolling=false;
+function taggerBarHtml(){
+  const done=!!(S&&S.tags_done);
+  const running=!!(_tagSt&&_tagSt.running);
+  let h='<div class="tagbar">';
+  if(done){
+    h+='<button id="btnTagger" onclick="runTagger(false)"'+(running?' disabled':'')+' title="'+
+      _esc('Les portraits ont déjà été analysés : ce bouton n\'analyse QUE les textures jamais analysées (nouvelles textures ajoutées au jeu). '+
+      'Les tags existants — y compris ceux modifiés à la main dans Qualification — ne sont pas touchés. '+
+      'Pour tout recalculer, utilise « Tout réanalyser ».')+'">🏷 Analyser les nouvelles textures</button>'+
+      '<button onclick="runTagger(true)"'+(running?' disabled':'')+' class="tagall" title="'+
+      _esc('Ré-analyse TOUTES les textures et REMPLACE leurs tags (les modifications manuelles des tags sont perdues). '+
+      'Les regards choisis à la main ne sont jamais modifiés. ~1-2 min.')+'">⟳ Tout réanalyser</button>'+
+      '<span class="tagok">✓ déjà analysés ('+Object.keys(S.tags||{}).length+')</span>';
+  }else{
+    h+='<button id="btnTagger" onclick="runTagger(false)"'+(running?' disabled':'')+' title="'+
+      _esc('détecte couleurs de cheveux/yeux, lunettes, casques, expressions... injectés dans les prompts pour la fidélité (~1-2 min, en arrière-plan)')+
+      '">🏷 Analyser les portraits (tags auto)</button>';
+  }
+  h+='<div id="tagProg" class="tagprog">'+taggerProgHtml()+'</div></div>';
+  return h;
+}
+function taggerProgHtml(){
+  const st=_tagSt;
+  if(!st||(!st.running&&!_tagWatch)) return '';
+  const p=st.progress||{};
+  if(st.running){
+    if(p.phase!=='tag')
+      return '<div class="tpline">⏳ Chargement du modèle d\'analyse…</div><div class="tpbar"><div class="tpfill tpindet"></div></div>';
+    const pct=p.total?Math.round(100*p.done/p.total):0;
+    return '<div class="tpline">🔍 Analyse <b>'+p.done+' / '+p.total+'</b> ('+pct+'%) — <span class="tpcur">'+_esc(p.current||'')+'</span></div>'+
+      '<div class="tpbar"><div class="tpfill" style="width:'+pct+'%"></div></div>'+
+      '<div class="tpsub">nouvelles : '+(p.new||0)+' · tags modifiés : '+(p.changed||0)+'</div>';
+  }
+  if(st.rc) return '<div class="tpline tperr">❌ L\'analyse a échoué (code '+st.rc+') — voir la console du serveur</div>';
+  if(p.phase!=='done') return '';
+  if(!p.total)
+    return '<div class="tpline tpok">✅ Rien à analyser : toutes les textures ont déjà des tags'+
+      (p.gaze?(' — '+p.gaze+' regard(s) « closed eyes » mis à jour'):'')+'</div>';
+  return '<div class="tpline tpok">✅ Analyse terminée — <b>'+p.total+'</b> texture(s) analysée(s)</div>'+
+    '<div class="tpsub">'+(p.new||0)+' nouvelle(s) · '+(p.changed||0)+' liste(s) de tags modifiée(s) · '+
+    (p.unchanged||0)+' inchangée(s) · '+(p.gaze||0)+' regard(s) « closed eyes » mis à jour</div>';
+}
+function taggerPaint(){
+  const el=document.getElementById('tagProg');
+  if(el) el.innerHTML=taggerProgHtml();
+  for(const b of document.querySelectorAll('.tagbar button')) b.disabled=!!(_tagSt&&_tagSt.running);
+}
+async function runTagger(force){
+  if(force&&!confirm(T('Ré-analyser TOUTES les textures ?\n\nLes tags existants seront remplacés, y compris ceux que tu as modifiés à la main dans Qualification. Les regards choisis à la main ne sont pas touchés.')))
+    return;
+  const r=await (await fetch('/api/tagger_run',{method:'POST',body:JSON.stringify({force:!!force})})).json();
+  if(!r.ok){toast(r.error||'erreur');return;}
+  _tagWatch=true;
+  _tagSt={running:true,progress:{phase:'model'}};
+  taggerPaint();
+  taggerPoll();
 }
 async function taggerPoll(){
+  if(_tagPolling) return;
+  _tagPolling=true;
   try{
-    const r=await (await fetch('/api/tagger_status')).json();
-    if(r.running){setTimeout(taggerPoll,4000);return;}
-    await refresh();
-    toast('🏷 Analyse terminée : '+r.tagged+' portraits taggés');
-    if(mode==='tri') render();
+    for(;;){
+      _tagSt=await (await fetch('/api/tagger_status')).json();
+      taggerPaint();
+      if(!_tagSt.running) break;
+      _tagWatch=true;
+      await new Promise(r=>setTimeout(r,1000));
+    }
+    if(_tagWatch){
+      const p=_tagSt.progress||{};
+      await refresh();
+      if(mode==='tri') renderKeepScroll();
+      if(_tagSt.rc) toast(T('❌ L\'analyse des portraits a échoué'));
+      else toast(p.total?('🏷 Analyse terminée : '+p.total+' texture(s), '+(p.new||0)+' nouvelle(s), '+(p.changed||0)+' modifiée(s)')
+                       :T('🏷 Rien à analyser : toutes les textures ont déjà des tags'));
+    }
   }catch(e){}
+  _tagPolling=false;
 }
 async function toggleEx(stem){
   const ex=S.excluded.includes(stem);

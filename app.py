@@ -616,7 +616,15 @@ class Handler(BaseHTTPRequestHandler):
                             "suffix": cfg["defaults"]["suffix"]}})
         elif p == "/api/tagger_status":
             running = _tagger_proc is not None and _tagger_proc.poll() is None
-            self._json({"running": running,
+            prog = {}
+            pf = os.path.join(os.path.dirname(xs.TAGS_FILE), "tagger_progress.json")
+            try:
+                with open(pf, "r", encoding="utf-8") as f:
+                    prog = json.load(f)
+            except (OSError, ValueError):
+                prog = {}
+            rc = None if (_tagger_proc is None or running) else _tagger_proc.returncode
+            self._json({"running": running, "rc": rc, "progress": prog,
                         "tagged": len(xs.load_portrait_tags())})
         elif p == "/api/queue":
             self._json(_queue_status())
@@ -936,8 +944,11 @@ class Handler(BaseHTTPRequestHandler):
             if _tagger_proc is not None and _tagger_proc.poll() is None:
                 self._json({"ok": False, "error": "analyse déjà en cours"})
                 return
+            # force : re-analyse TOUTES les textures ; sinon seulement les
+            # nouvelles (jamais analysees)
             _tagger_proc = subprocess.Popen(
-                [sys.executable, os.path.join(xs.APP_DIR, "tagger.py")],
+                [sys.executable, os.path.join(xs.APP_DIR, "tagger.py")]
+                + (["--force"] if body.get("force") else []),
                 cwd=xs.APP_DIR,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             self._json({"ok": True})
