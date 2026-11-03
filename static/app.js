@@ -950,7 +950,9 @@ function showPop(ev,st,stem,kind){
   kind=kind||'custom';
   popCtx={style:st,stem:stem,kind:kind};
   const s=S.settings||{};
-  const qty={custom:s.custom_count||5,missing:s.regen_count||2,all:s.gen_all_count||2,perso:s.regen_count||2}[kind];
+  let qty={custom:s.custom_count||5,missing:s.regen_count||2,all:s.gen_all_count||2,perso:s.regen_count||2}[kind];
+  /* quantite de la precedente generation lancee depuis ce type de popup */
+  try{const last=+JSON.parse(localStorage.getItem('pf_last_qty')||'{}')[kind];if(last>0) qty=last;}catch(e){}
   setPopQty(qty);
   delete document.getElementById('popPos').dataset.noauto; /* tags auto par defaut */
   document.getElementById('popSeedRow').style.display=(kind==='custom')?'':'none';
@@ -1258,6 +1260,12 @@ function dnExplain(){
 }
 async function launchRegen(front){
   const n=+document.getElementById('popQty').value;
+  /* retenir la quantite pour la prochaine ouverture de ce type de popup */
+  try{
+    const m=JSON.parse(localStorage.getItem('pf_last_qty')||'{}');
+    m[(popCtx&&popCtx.kind)||'custom']=n;
+    localStorage.setItem('pf_last_qty',JSON.stringify(m));
+  }catch(e){}
   if(popCtx&&popCtx.kind==='perso'){
     /* ce perso dans chaque style actif, reglages propres a chaque style */
     const r=await (await fetch('/api/regen_perso',{method:'POST',body:JSON.stringify({
