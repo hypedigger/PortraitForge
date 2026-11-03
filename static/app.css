@@ -95,6 +95,10 @@ button.primary:hover{background:linear-gradient(135deg,#10b981,#14b8a6);box-shad
 /* poignee de redimensionnement visible (coin bas-droit, comme une fenetre) */
 #pop::-webkit-resizer{background:linear-gradient(135deg,transparent 0 50%,#5af 50% 60%,transparent 60% 70%,#5af 70% 80%,transparent 80%);border-radius:0 0 10px 0}
 #pop h3{margin:0 0 10px;font-size:14px;color:#bdf;cursor:move;user-select:none}
+/* croix de fermeture : reste visible quand on fait defiler le contenu */
+#pop .popx{position:sticky;top:0;float:right;z-index:3;margin:-6px -6px 0 8px;width:30px;height:30px;
+ padding:0;border-radius:8px;font-size:15px;line-height:28px;text-align:center;color:#9ab;background:#2a2f3a;border:1px solid #39404f}
+#pop .popx:hover{color:#fff;background:#b4232f;border-color:#e5484d}
 #pop input[type=number],#pop input[type=text]{padding:8px 10px;font-size:14px;box-sizing:border-box}
 #pop .qty input{width:76px}
 #pop select,#pop .selfilter{padding:7px 10px;font-size:13px}

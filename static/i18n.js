@@ -62,6 +62,7 @@ const PF_I18N_EN = {
   "copier le prompt positif final": "copy the final positive prompt",
   "copier le prompt négatif final": "copy the final negative prompt",
   "Afficher :": "Show:", "tout": "all", "custom…": "custom…",
+  "fermer (Échap)": "close (Esc)",
   "nombre d'images affichées dans le mur (les plus récentes d'abord)": "number of images shown on the wall (most recent first)",
   "0 = toutes les images": "0 = all images",
   "🏷 Analyser les nouvelles textures": "🏷 Analyze new textures",
