@@ -869,41 +869,53 @@ def save_portrait_words(words):
 # personnage dans l'UI (meta.framing). Les termes de cadrage sont retires du
 # prompt puis reinjectes selon le cadrage effectif de CHAQUE image.
 
+# "knees" (plan trois-quarts) : debout, coupe entre genoux et chevilles ->
+# tag Danbooru "feet out of frame" ; "full body" en negatif pour que le
+# modele n'invente pas des pieds absents de l'original
+FRAMING_VALUES = ("portrait", "knees", "full")
 FRAMING_POS = {"portrait": "portrait, upper body",
+               "knees": "standing, feet out of frame",
                "full": "full body, standing, head to toe"}
 FRAMING_NEG = {"portrait": "full body",
+               "knees": "full body, close-up",
                "full": "portrait, close-up, cropped legs"}
 _FRAMING_TOKENS = {"portrait", "upper body", "full body", "standing",
-                   "head to toe"}
+                   "head to toe", "feet out of frame"}
+_FRAMING_CACHE = "framing_auto2"  # v2 : detection du plan trois-quarts
 
 
 def _detect_framing(path, stem):
-    """'full' si la zone opaque est nettement plus haute que large,
-    ou si le tagger a vu 'full body' ; sinon 'portrait'."""
-    if "full body" in load_portrait_tags().get(stem, ""):
-        return "full"
+    """Silhouette nettement plus haute que large -> 'knees' si elle est
+    coupee net en bas (la derniere ligne opaque est large : jambes/jupe
+    tranchees, alors que des pieds ne laissent que des semelles etroites),
+    sinon 'full'. Silhouette non haute : 'full' si le tagger a vu
+    'full body', sinon 'portrait'."""
     try:
         with Image.open(path) as im:
-            im = im.convert("RGBA")
-            box = im.getchannel("A").getbbox() or (0, 0, im.width, im.height)
-        bw, bh = box[2] - box[0], box[3] - box[1]
+            a = im.convert("RGBA").getchannel("A")
+            box = a.getbbox() or (0, 0, im.width, im.height)
+            bw, bh = box[2] - box[0], box[3] - box[1]
+            last = a.crop((0, box[3] - 1, im.width, box[3])).getbbox()
+            last_ratio = ((last[2] - last[0]) / bw) if (last and bw) else 0
         if bw > 0 and bh >= 1.6 * bw:
-            return "full"
+            return "knees" if last_ratio >= 0.2 else "full"
     except Exception:
         pass
+    if "full body" in load_portrait_tags().get(stem, ""):
+        return "full"
     return "portrait"
 
 
 def framing_map():
     """{stem: cadrage effectif} pour tous les portraits (detection en cache)."""
     meta = load_portrait_meta()
-    cache = _state_load("framing_auto", None, {})
+    cache = _state_load(_FRAMING_CACHE, None, {})
     dirty = False
     out = {}
     for p in list_portraits():
         s = p["stem"]
         f = (meta.get(s) or {}).get("framing")
-        if f in ("portrait", "full"):
+        if f in FRAMING_VALUES:
             out[s] = f
             continue
         if s not in cache:
@@ -911,20 +923,20 @@ def framing_map():
             dirty = True
         out[s] = cache[s]
     if dirty:
-        _state_save("framing_auto", cache)
+        _state_save(_FRAMING_CACHE, cache)
     return out
 
 
 def portrait_framing(stem):
     """Cadrage effectif d'un portrait : choix manuel sinon auto-detection."""
     f = (load_portrait_meta().get(stem) or {}).get("framing")
-    if f in ("portrait", "full"):
+    if f in FRAMING_VALUES:
         return f
-    cache = _state_load("framing_auto", None, {})
+    cache = _state_load(_FRAMING_CACHE, None, {})
     if stem not in cache:
         cache[stem] = _detect_framing(
             os.path.join(ORIGINALS_DIR, stem + ".png"), stem)
-        _state_save("framing_auto", cache)
+        _state_save(_FRAMING_CACHE, cache)
     return cache[stem]
 
 

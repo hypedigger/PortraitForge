@@ -1340,7 +1340,7 @@ class Handler(BaseHTTPRequestHandler):
             if "framing" in body:
                 # cadrage : portrait / full (force), none (aucune directive),
                 # custom (texte libre framing_text) ; autre valeur = auto
-                if body.get("framing") in ("portrait", "full", "none", "custom"):
+                if body.get("framing") in xs.FRAMING_VALUES + ("none", "custom"):
                     cur["framing"] = body["framing"]
                 else:
                     cur.pop("framing", None)

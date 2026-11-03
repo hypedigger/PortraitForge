@@ -447,7 +447,7 @@ function renderDetail(){
        fait dans Tri des textures > Qualification (clic sur le resume) */
     const sxIco={male:'♂',female:'♀',other:'✎'}[m.sex||'male'];
     const frEff=(S.framing&&S.framing[p.stem])||'portrait';
-    const frIco=m.framing==='none'?'∅':m.framing==='custom'?'✎':(frEff==='full'?'🧍':'👤');
+    const frIco=m.framing==='none'?'∅':m.framing==='custom'?'✎':({full:'🧍',knees:'¾'}[frEff]||'👤');
     const gzIco=m.gaze==='viewer'?'👁':m.gaze==='ahead'?'➡':m.gaze==='custom'?'✎':'∅';
     left.innerHTML='<div class="qsum">'+p.stem+'</div>'+
       '<div class="qbadges" data-tip="sexe · cadrage · regard — clic : modifier la qualification (Tri des textures › Qualification)">'+
@@ -833,7 +833,7 @@ async function setFraming(stem,v,text){
   await refresh(); renderKeepScroll();
   toast(v==='none'?T('🖼 Cadrage : aucune directive')
        :v==='custom'?T('🖼 Cadrage custom enregistré')
-       :v?('🖼 Cadrage forcé : '+(v==='full'?'plein pied':'buste'))
+       :v?('🖼 Cadrage forcé : '+({full:'plein pied',knees:'trois-quarts'}[v]||'buste'))
        :T('🖼 Cadrage : retour à l\'auto-détection'));
 }
 async function setSex(stem,sex,text){
@@ -1048,8 +1048,9 @@ async function _popPreviewFetch(){
   const line=(cls,ico,lbl,pos,neg,note)=>'<div class="psrow"><span class="pslbl '+cls+'">'+ico+' '+lbl+'</span>'+
     '<span class="psval">'+(pos?'<span class="'+cls+'">'+_esc(pos)+'</span>':'<i class="psdim">—</i>')+
     (neg?' <span class="psneg">⊘ '+_esc(neg)+'</span>':'')+(note?' <span class="psdim">'+note+'</span>':'')+'</span></div>';
-  const frMode={'auto-portrait':'(auto : buste)','auto-full':'(auto : plein pied)',portrait:'(forcé : buste)',
-    full:'(forcé : plein pied)',none:'(aucune directive)',custom:'(custom)'}[(P.framing||{}).mode]||'';
+  const frMode={'auto-portrait':'(auto : buste)','auto-full':'(auto : plein pied)','auto-knees':'(auto : trois-quarts)',
+    portrait:'(forcé : buste)',full:'(forcé : plein pied)',knees:'(forcé : trois-quarts)',
+    none:'(aucune directive)',custom:'(custom)'}[(P.framing||{}).mode]||'';
   let h='<div class="pslist">';
   h+=line('ps-sex','⚥','Sexe',P.sex&&P.sex.pos,P.sex&&P.sex.neg);
   h+=line('ps-tag','🏷','Tags auto',noauto?'':P.tags,'',
@@ -2087,9 +2088,12 @@ function renderTriQual(){
       '<input class="sxtxt qtxt-sex'+(sx==='other'?' show':'')+'" placeholder="ex: monster, furry" value="'+_esc(m.text||'')+'">'+
       '<div class="qrow"><span class="qlbl">Cadrage</span>'+
         '<button class="sxb sxf qfr'+((frExp==='portrait'||(!frExp&&frEff==='portrait'))?' on':'')+(frExp==='portrait'?' forced':'')+'" '+
-          'title="'+(frExp==='portrait'?'cadrage forcé : buste — re-clic : retour auto':'cadrage buste'+(frExp?'':' (auto-détecté)'))+'">👤 Buste</button>'+
+          'title="'+(frExp==='portrait'?'cadrage forcé : buste — re-clic : retour auto':'cadrage buste'+(frExp?'':' (auto-détecté)'))+'"><span class="qemo">👤 </span>Buste</button>'+
+        '<button class="sxb sxf qfr'+((frExp==='knees'||(!frExp&&frEff==='knees'))?' on':'')+(frExp==='knees'?' forced':'')+'" '+
+          'title="'+(frExp==='knees'?'cadrage forcé : trois-quarts (coupé sous les genoux) — re-clic : retour auto':
+            'plan trois-quarts : debout, coupé entre genoux et chevilles → « standing, feet out of frame »'+(frExp?'':' (auto-détecté)'))+'">¾<span class="qlong"> Genoux</span></button>'+
         '<button class="sxb sxf qfr'+((frExp==='full'||(!frExp&&frEff==='full'))?' on':'')+(frExp==='full'?' forced':'')+'" '+
-          'title="'+(frExp==='full'?'cadrage forcé : plein pied — re-clic : retour auto':'cadrage plein pied'+(frExp?'':' (auto-détecté)'))+'">🧍 Pied</button>'+
+          'title="'+(frExp==='full'?'cadrage forcé : plein pied — re-clic : retour auto':'cadrage plein pied'+(frExp?'':' (auto-détecté)'))+'"><span class="qemo">🧍 </span>Pied</button>'+
         '<button class="sxb sxf qfr'+(frExp==='none'?' on':'')+'" '+
           'title="aucune directive de cadrage dans le prompt — re-clic : retour auto">∅</button>'+
         '<button class="sxb sxf qfr'+(frExp==='custom'?' on':'')+'" '+
@@ -2097,9 +2101,9 @@ function renderTriQual(){
       '<input class="sxtxt qtxt-fr'+(frExp==='custom'?' show':'')+'" placeholder="ex: cowboy shot, from behind" value="'+_esc(m.framing_text||'')+'">'+
       '<div class="qrow"><span class="qlbl">Regard</span>'+
         '<button class="sxb sxg qgz'+((m.gaze==='viewer')?' on':'')+'" '+
-          'title="ajoute \'looking at viewer\' au prompt : le personnage regarde la caméra">👁 Caméra</button>'+
+          'title="ajoute \'looking at viewer\' au prompt : le personnage regarde la caméra"><span class="qemo">👁 </span>Caméra</button>'+
         '<button class="sxb sxg qgz'+((m.gaze==='ahead')?' on':'')+'" '+
-          'title="ajoute \'looking ahead\' au prompt : le personnage regarde droit devant lui">➡ Devant</button>'+
+          'title="ajoute \'looking ahead\' au prompt : le personnage regarde droit devant lui"><span class="qemo">➡ </span>Devant</button>'+
         '<button class="sxb sxg qgz'+(!m.gaze?' on':'')+'" '+
           'title="aucune directive de regard dans le prompt (le ControlNet suit la pose d\'origine)">∅</button>'+
         '<button class="sxb sxg qgz'+(m.gaze==='custom'?' on':'')+'" '+
@@ -2116,24 +2120,31 @@ function renderTriQual(){
     const m=S.meta[stem]||{};
     const sexes=['male','female','other'];
     const clss=['m','f','o'];
+    /* apres un choix "texte libre" la carte est re-rendue : focus sur le champ */
+    const focusQ=sel=>{const el=document.querySelector('#q-'+CSS.escape(stem)+' '+sel);
+      if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}};
     card.querySelectorAll('.qsx').forEach((b,i)=>{b.onclick=async(ev)=>{
       const r=ev.currentTarget.getBoundingClientRect();
       await setSex(stem,sexes[i],card.querySelector('.qtxt-sex').value);
       /* enchainer les persos sans bouger la souris */
       if(sexes[i]!=='other') advanceScroll(stem,clss[i],r);
+      else focusQ('.qtxt-sex');
     };});
     card.querySelector('.qtxt-sex').onchange=e=>setSex(stem,'other',e.target.value);
-    const frv=['portrait','full','none','custom'];
-    card.querySelectorAll('.qfr').forEach((b,i)=>{b.onclick=()=>{
+    const frv=['portrait','knees','full','none','custom'];
+    card.querySelectorAll('.qfr').forEach((b,i)=>{b.onclick=async()=>{
       const v=frv[i];
       /* re-clic sur un cadrage deja force = retour a l'auto-detection */
-      setFraming(stem,(v!=='custom'&&m.framing===v)?null:v,
-                 card.querySelector('.qtxt-fr').value);
+      await setFraming(stem,(v!=='custom'&&m.framing===v)?null:v,
+                       card.querySelector('.qtxt-fr').value);
+      if(v==='custom') focusQ('.qtxt-fr');
     };});
     card.querySelector('.qtxt-fr').onchange=e=>setFraming(stem,'custom',e.target.value);
     const gzv=['viewer','ahead',null,'custom'];
-    card.querySelectorAll('.qgz').forEach((b,i)=>{b.onclick=()=>
-      setGaze(stem,gzv[i],card.querySelector('.qtxt-gz').value);});
+    card.querySelectorAll('.qgz').forEach((b,i)=>{b.onclick=async()=>{
+      await setGaze(stem,gzv[i],card.querySelector('.qtxt-gz').value);
+      if(gzv[i]==='custom') focusQ('.qtxt-gz');
+    };});
     card.querySelector('.qtxt-gz').onchange=e=>setGaze(stem,'custom',e.target.value);
     /* tags : clic = edition sur place (zone de texte), Echap = annuler */
     card.querySelector('.qtags').onclick=()=>{
