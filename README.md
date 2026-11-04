@@ -15,7 +15,9 @@ PortraitForge drives a local [ComfyUI](https://github.com/comfyanonymous/ComfyUI
 - **Auto-tagging** (WD ViT tagger, ONNX, CPU): hair/eye color, glasses, helmets… are detected per character and injected into every prompt, so a blond stays blond in every style. Per-character sex/custom tags.
 - **Transparent portraits handled end to end**: ISNet-anime matting removes the white halo around regenerated characters; output keeps clean alpha.
 - **Any aspect ratio**: full-body sprites generate at their native ratio (long side = your resolution setting), never squashed to a square.
-- **Per-image framing**: each texture is auto-detected as *bust* or *full body* (opaque-area ratio + tagger) and prompted accordingly — overridable per character, with an optional per-game prompt suffix.
+- **Per-image framing**: each texture is auto-detected as *bust*, *three-quarter* (cut below the knees) or *full body* (opaque-area shape + tagger) and prompted accordingly — overridable per character, with an optional per-game prompt suffix.
+- **Per-image outline**: *strict* keeps the result inside the original silhouette (assembled sprites), *margin* allows a slight overflow, *free* keeps the whole new drawing anywhere inside the texture frame (illustrations whose proportions change with the style). Set per character in the Qualification tab, with a per-game default and a one-off override when regenerating.
+- **Character qualification tab**: sex, framing, gaze (camera / ahead / free text) and outline per character, plus editable auto tags — with a live preview of the exact prompt sent for each generation.
 - Generation **queue with live progress and ETA**, FIFO order, priority button, **persistent across crashes**, and a **ComfyUI watchdog** that relaunches the backend if it dies.
 - Every PNG stores its **full generation parameters** — one click re-runs any image with its exact settings (or tweaked).
 

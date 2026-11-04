@@ -449,9 +449,10 @@ function renderDetail(){
     const frEff=(S.framing&&S.framing[p.stem])||'portrait';
     const frIco=m.framing==='none'?'∅':m.framing==='custom'?'✎':({full:'🧍',knees:'¾'}[frEff]||'👤');
     const gzIco=m.gaze==='viewer'?'👁':m.gaze==='ahead'?'➡':m.gaze==='custom'?'✎':'∅';
+    const mkIco={strict:'🔒',margin:'↔',free:'🆓'}[m.mask||gameMaskDefault()];
     left.innerHTML='<div class="qsum">'+p.stem+'</div>'+
-      '<div class="qbadges" data-tip="sexe · cadrage · regard — clic : modifier la qualification (Tri des textures › Qualification)">'+
-      sxIco+' · '+frIco+' · '+gzIco+'</div>';
+      '<div class="qbadges" data-tip="sexe · cadrage · regard · contour — clic : modifier la qualification (Tri des textures › Qualification)">'+
+      sxIco+' · '+frIco+' · '+gzIco+' · '+mkIco+'</div>';
     left.querySelector('.qbadges').onclick=()=>gotoQual(p.stem);
     row.appendChild(left);
     const co=document.createElement('div');co.className='cell orig';
@@ -954,6 +955,7 @@ function showPop(ev,st,stem,kind){
   /* quantite de la precedente generation lancee depuis ce type de popup */
   try{const last=+JSON.parse(localStorage.getItem('pf_last_qty')||'{}')[kind];if(last>0) qty=last;}catch(e){}
   setPopQty(qty);
+  document.getElementById('popMask').value=''; /* contour : selon la qualification */
   delete document.getElementById('popPos').dataset.noauto; /* tags auto par defaut */
   document.getElementById('popSeedRow').style.display=(kind==='custom')?'':'none';
   document.getElementById('popSeed').value='';
@@ -1296,6 +1298,8 @@ async function launchRegen(front){
     pos:document.getElementById('popPos').value,
     neg:document.getElementById('popNeg').value,
     checkpoint:isCustom?(ck||null):((ck&&ck!==stc.checkpoint)?ck:null),
+    /* contour force pour cette generation (vide = qualification de l'image) */
+    mask_mode:document.getElementById('popMask').value||null,
     lora_enabled:document.getElementById('popLoraOn')?document.getElementById('popLoraOn').checked:true},params);
   if(isCustom){
     body.lora=document.getElementById('popLoraSel')?document.getElementById('popLoraSel').value:'';
@@ -1503,6 +1507,7 @@ function optOpen(){
   document.getElementById('optINeg').value=(S.defaults&&S.defaults.il_negative)||'';
   document.getElementById('optSuffix').value=(S.defaults&&S.defaults.suffix)||'';
   document.getElementById('optGameSuffix').value=(S.game&&S.game.suffix)||'';
+  document.getElementById('optGameMask').value=gameMaskDefault();
   document.getElementById('optGameSuffix').placeholder=(S.defaults&&S.defaults.suffix)||'';
   fillCheckpoints();
   document.getElementById('optThumb').value=s.thumb_size||'moyennes';
@@ -2123,6 +2128,36 @@ function renderTri(){
   c.innerHTML=h;
   triBindDnD();
 }
+/* ---------- contour du resultat (strict / marge / libre) ---------- */
+const MASK_LABELS={strict:'🔒 Strict',margin:'↔ Marge',free:'🆓 Libre'};
+function gameMaskDefault(){return (S.game&&S.game.mask_mode)||'strict';}
+/* ligne "Contour" d'une carte de qualification ; sans choix explicite, le
+   defaut du jeu est allume (comme l'auto-detection du cadrage) */
+function maskRowHtml(m){
+  const eff=m.mask||gameMaskDefault();
+  const tips={
+    strict:'le résultat ne déborde jamais de la silhouette de l\'image d\'origine — pour les SPRITES assemblés (pièces qui ne doivent pas se chevaucher)',
+    margin:'le résultat peut déborder un peu de la silhouette d\'origine (6 % de la taille de l\'image)',
+    free:'le nouveau dessin est détouré tel quel, n\'importe où dans le cadre de l\'image — pour les ILLUSTRATIONS dont les proportions changent avec le style'};
+  return '<div class="qrow"><span class="qlbl">Contour</span>'+
+    ['strict','margin','free'].map(k=>'<button class="sxb sxk qmk'+(eff===k?' on':'')+(m.mask===k?' forced':'')+'" '+
+      'title="'+tips[k]+(m.mask===k?' — re-clic : retour au défaut du jeu':(!m.mask&&eff===k?' (défaut du jeu)':''))+'">'+
+      '<span class="qemo">'+MASK_LABELS[k].split(' ')[0]+' </span>'+MASK_LABELS[k].split(' ')[1]+'</button>').join('')+'</div>';
+}
+async function setMask(stem,v){
+  await fetch('/api/meta',{method:'POST',body:JSON.stringify({stem:stem,mask:v})});
+  const m=Object.assign({},S.meta[stem]);
+  if(v) m.mask=v; else delete m.mask;
+  S.meta[stem]=m;
+  renderKeepScroll();
+  toast(v?T('✂ Contour : ')+MASK_LABELS[v]:T('✂ Contour : défaut du jeu'));
+}
+async function gameMaskSave(v){
+  await fetch('/api/game_mask',{method:'POST',body:JSON.stringify({mask_mode:v})});
+  if(S.game){if(v&&v!=='strict') S.game.mask_mode=v; else delete S.game.mask_mode;}
+  toast(T('✂ Contour par défaut du jeu : ')+MASK_LABELS[v||'strict']);
+  if(mode==='tri') renderKeepScroll();
+}
 /* ---------- tri > qualification (sexe / cadrage / regard par perso) ---------- */
 function qualCols(n){
   try{localStorage.setItem('pf_qual_cols',n);}catch(e){}
@@ -2179,6 +2214,7 @@ function renderTriQual(){
         '<button class="sxb sxg qgz'+(m.gaze==='custom'?' on':'')+'" '+
           'title="regard en texte libre (ex: looking away, looking up)">✎</button></div>'+
       '<input class="sxtxt qtxt-gz'+(m.gaze==='custom'?' show':'')+'" placeholder="ex: looking away, looking up" value="'+_esc(m.gaze_text||'')+'">'+
+      maskRowHtml(m)+
       '<div class="qtags" data-tip="tags du personnage (auto-détectés, injectés dans tous ses prompts) · clic : modifier — liste complète : '+_esc((S.tags&&S.tags[p.stem])||'aucun')+'">🏷 '+
         _esc((S.tags&&S.tags[p.stem])||'— pas encore analysé — clic : saisir à la main')+'</div>'+
       '</div></div>';
@@ -2216,6 +2252,10 @@ function renderTriQual(){
       if(gzv[i]==='custom') focusQ('.qtxt-gz');
     };});
     card.querySelector('.qtxt-gz').onchange=e=>setGaze(stem,'custom',e.target.value);
+    const mkv=['strict','margin','free'];
+    card.querySelectorAll('.qmk').forEach((b,i)=>{b.onclick=()=>
+      /* re-clic sur le mode deja choisi = retour au defaut du jeu */
+      setMask(stem,(m.mask===mkv[i])?null:mkv[i]);});
     /* tags : clic = edition sur place (zone de texte), Echap = annuler */
     card.querySelector('.qtags').onclick=()=>{
       const qt=card.querySelector('.qtags');

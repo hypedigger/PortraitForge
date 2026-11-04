@@ -439,7 +439,8 @@ def _worker():
                                     cnet_end=job.get("cnet_end"),
                                     checkpoint=job.get("checkpoint"),
                                     lora_enabled=job.get("lora_enabled", True),
-                                    auto_tags=job.get("auto_tags", True))
+                                    auto_tags=job.get("auto_tags", True),
+                                    mask_mode=job.get("mask_mode"))
             _durations.append(time.time() - _job_t0)
             del _durations[:-10]
             # temps moyens par style (page sante)
@@ -944,7 +945,8 @@ class Handler(BaseHTTPRequestHandler):
                    "checkpoint": body.get("checkpoint"),
                    "lora_enabled": body.get("lora_enabled", True),
                    "lora": body.get("lora"), "source": body.get("source"),
-                   "steps": body.get("steps"), "cfg": body.get("cfg")}
+                   "steps": body.get("steps"), "cfg": body.get("cfg"),
+                   "mask_mode": body.get("mask_mode")}
             # ordre chronologique des demandes ; front=True seulement si
             # demande explicitement prioritaire (bouton "Generer en priorite").
             # seed explicite + plusieurs exemplaires : seed incrementee par
@@ -1090,6 +1092,18 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"ok": True, "destination": xs.game_destination(game)})
                     return
             self._json({"ok": False, "error": "jeu courant introuvable"}, 404)
+        elif p == "/api/game_mask":
+            # contour par defaut des images du jeu courant (strict si absent)
+            g = xs.load_games()
+            for game in g["games"]:
+                if game["id"] == g.get("current"):
+                    if body.get("mask_mode") in xs.MASK_MODES:
+                        game["mask_mode"] = body["mask_mode"]
+                    else:
+                        game.pop("mask_mode", None)
+                    xs.save_games(g)
+                    break
+            self._json({"ok": True})
         elif p == "/api/game_suffix":
             # suffixe de prompt propre au jeu courant (vide = suffixe commun)
             g = xs.load_games()
@@ -1146,7 +1160,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True, "selected": n})
         elif p == "/api/regen_all":
             excluded = xs.load_excluded()
-            count = max(1, min(10, int(body.get("count")
+            count = max(1, min(50, int(body.get("count")
                                        or load_settings().get("gen_all_count", 2))))
             base = {"style": body["style"], "denoise": body.get("denoise"),
                     "pos": body.get("pos"), "neg": body.get("neg"),
@@ -1156,7 +1170,8 @@ class Handler(BaseHTTPRequestHandler):
                     "checkpoint": body.get("checkpoint"),
                     "lora_enabled": body.get("lora_enabled", True),
                     "lora": body.get("lora"), "source": body.get("source"),
-                    "steps": body.get("steps"), "cfg": body.get("cfg")}
+                    "steps": body.get("steps"), "cfg": body.get("cfg"),
+                   "mask_mode": body.get("mask_mode")}
             sex = body.get("sex")
             meta = xs.load_portrait_meta()
             jobs = []
@@ -1174,7 +1189,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True, "queued": len(jobs)})
         elif p == "/api/regen_perso":
             # X generations de CE personnage dans CHACUN des styles actifs
-            n = max(1, min(10, int(body.get("count", 1))))
+            n = max(1, min(50, int(body.get("count", 1))))
             hidden = set(load_settings().get("hidden_styles") or [])
             cfg = xs.load_styles()
             keys = [k for k in cfg["styles"] if k not in hidden]
@@ -1182,14 +1197,15 @@ class Handler(BaseHTTPRequestHandler):
             for sk in keys:
                 for _ in range(n):
                     jobs.append({"style": sk, "stem": body["stem"],
-                                 "pos": body.get("pos"), "neg": body.get("neg")})
+                                 "pos": body.get("pos"), "neg": body.get("neg"),
+                                 "mask_mode": body.get("mask_mode")})
             _enqueue(jobs, front=bool(body.get("front")))
             self._json({"ok": True, "queued": len(jobs), "styles": len(keys)})
         elif p == "/api/regen_missing":
             variants = list_variants()
             excluded = xs.load_excluded()
             selections = xs.load_selections()
-            count = max(1, min(10, int(body.get("count")
+            count = max(1, min(50, int(body.get("count")
                                        or load_settings().get("regen_count", 2))))
             base = {"style": body["style"], "denoise": body.get("denoise"),
                     "pos": body.get("pos"), "neg": body.get("neg"),
@@ -1197,7 +1213,8 @@ class Handler(BaseHTTPRequestHandler):
                     "cnet_strength": body.get("cnet_strength"),
                     "cnet_end": body.get("cnet_end"),
                     "checkpoint": body.get("checkpoint"),
-                    "lora_enabled": body.get("lora_enabled", True)}
+                    "lora_enabled": body.get("lora_enabled", True),
+                    "mask_mode": body.get("mask_mode")}
             sex = body.get("sex")
             meta = xs.load_portrait_meta()
             jobs = []
@@ -1394,6 +1411,13 @@ class Handler(BaseHTTPRequestHandler):
                     cur["framing_text"] = (body.get("framing_text") or "").strip()
                 else:
                     cur.pop("framing_text", None)
+            if "mask" in body:
+                # contour du resultat : strict (sprite assemble), margin,
+                # free (illustration) ; autre valeur = defaut du jeu
+                if body.get("mask") in xs.MASK_MODES:
+                    cur["mask"] = body["mask"]
+                else:
+                    cur.pop("mask", None)
             if "gaze" in body:
                 # regard : viewer / ahead, custom (texte libre gaze_text) ;
                 # autre valeur = aucune directive

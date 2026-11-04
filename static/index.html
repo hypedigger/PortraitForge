@@ -97,6 +97,13 @@
   <div style="margin-top:6px">
    <label title="retire le voile blanc sur les bords semi-transparents des images générées"><input type="checkbox" id="optAntiHalo" checked onchange="optSave()"> Anti-halo sur les contours ⓘ</label>
   </div>
+  <div class="qty" style="margin-top:6px"><label title="contour par défaut du JEU COURANT, modifiable image par image dans Tri des textures › Qualification. Strict : le résultat ne déborde jamais de la silhouette d'origine (sprites assemblés). Marge : léger débord permis. Libre : le nouveau dessin est détouré tel quel dans le cadre de l'image (illustrations)">Contour par défaut (jeu courant) ⓘ :</label>
+   <select id="optGameMask" onchange="gameMaskSave(this.value)">
+    <option value="strict">🔒 Strict (silhouette d'origine)</option>
+    <option value="margin">↔ Marge (léger débord)</option>
+    <option value="free">🆓 Libre (cadre de l'image)</option>
+   </select>
+  </div>
   <div style="margin-top:6px">
    <label title="affiche une notification Windows quand toutes les générations sont finies (demande l'autorisation du navigateur)"><input type="checkbox" id="optNotify" onchange="optNotifyToggle()"> Notification Windows en fin de génération ⓘ</label>
   </div>
@@ -366,6 +373,13 @@
   <input id="popSeed" type="number" min="0" style="width:130px">
   <label id="popSeedReuseWrap" style="display:none;cursor:pointer" title="reprendre la seed exacte de l'image consultée"><input type="checkbox" id="popSeedReuse" onchange="popSeedReuseToggle()"> même seed</label></div>
  <label style="display:flex;align-items:center;gap:6px;margin:6px 0"><input type="checkbox" id="popMemo" checked> Mémoriser LoRA / denoise / ControlNet pour ce style</label>
+ <div class="qty"><label title="où le résultat peut déborder : par défaut, le réglage de chaque image (Tri des textures › Qualification). Choisir un mode ici le force pour CETTE génération seulement">Contour ⓘ :</label>
+  <select id="popMask" onchange="popPreviewRefresh()">
+   <option value="">selon la qualification de l'image</option>
+   <option value="strict">🔒 Strict (silhouette d'origine)</option>
+   <option value="margin">↔ Marge (léger débord)</option>
+   <option value="free">🆓 Libre (cadre de l'image)</option>
+  </select></div>
  </div>
  <label>Ajouter au prompt positif (fin de prompt) :</label>
  <textarea id="popPos" placeholder="ex: smiling, red scarf, freckles" oninput="popPreviewRefresh()"></textarea>

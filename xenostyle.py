@@ -490,6 +490,85 @@ def refine_alpha(out_image, alpha):
         return shrink_alpha(a, erode_px=max(1, round(out_image.size[0] / 512)))
 
 
+MASK_MODES = ("strict", "margin", "free")
+MARGIN_FRAC = 0.06  # mode "margin" : debord autorise = 6 % du grand cote
+
+
+def resolve_mask_mode(mode=None, stem=None):
+    """Mode de contour effectif : choix ponctuel (popup), sinon qualification
+    du personnage (meta.mask : sprite assemble -> strict, illustration ->
+    libre), sinon defaut du jeu, sinon 'strict' (comportement historique)."""
+    if mode in MASK_MODES:
+        return mode
+    if stem:
+        m = (load_portrait_meta().get(stem) or {}).get("mask")
+        if m in MASK_MODES:
+            return m
+    g = current_game().get("mask_mode")
+    return g if g in MASK_MODES else "strict"
+
+
+def _dilate(alpha, px):
+    """Elargit le masque de px pixels (silhouette d'origine + marge)."""
+    import numpy as np
+    try:
+        from scipy import ndimage
+        a = np.asarray(alpha) > 127
+        dist = ndimage.distance_transform_edt(~a)
+        return Image.fromarray(((dist <= px) * 255).astype(np.uint8), "L")
+    except ImportError:
+        from PIL import ImageFilter
+        out = alpha
+        for _ in range(max(1, int(px) // 4)):
+            out = out.filter(ImageFilter.MaxFilter(9))
+        return out
+
+
+def _free_alpha_fallback(out_image):
+    """Sans modele de detourage : le fond blanc relie au bord de l'image
+    devient transparent."""
+    import numpy as np
+    try:
+        from scipy import ndimage
+    except ImportError:
+        return Image.new("L", out_image.size, 255)
+    rgb = np.asarray(out_image.convert("RGB"), dtype=np.float32)
+    white = (rgb.mean(axis=2) >= 235) & ((rgb.max(axis=2) - rgb.min(axis=2)) <= 30)
+    labels, _ = ndimage.label(white)
+    edge = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
+    bg = np.isin(labels, edge[edge > 0])
+    return Image.fromarray(((~bg) * 255).astype(np.uint8), "L")
+
+
+def finalize_alpha(out, alpha, mode, anti_halo=True, stem=None):
+    """Transparence finale d'une generation selon le mode de contour :
+    - strict : jamais au-dela de la silhouette d'origine (historique) ;
+    - margin : silhouette d'origine elargie de MARGIN_FRAC ;
+    - free   : detourage du NOUVEAU dessin seul, n'importe ou dans le cadre
+               de la texture (taille / ratio d'origine)."""
+    mode = resolve_mask_mode(mode, stem)
+    if out.size != alpha.size:
+        alpha = alpha.resize(out.size, Image.LANCZOS)
+    # marge / libre : le detourage du nouveau dessin est indispensable (sinon
+    # le fond blanc de l'img2img resterait opaque dans la zone autorisee)
+    if mode == "free":
+        try:
+            a = anime_matte(out)
+        except Exception:
+            a = _free_alpha_fallback(out)
+    elif mode == "margin":
+        a = refine_alpha(out, _dilate(alpha, max(4, round(max(out.size) * MARGIN_FRAC))))
+    elif anti_halo:
+        a = refine_alpha(out, alpha)
+    else:
+        a = alpha
+    if anti_halo or mode != "strict":
+        return unmatte_white(out, a)
+    out = out.convert("RGBA")
+    out.putalpha(a)
+    return out
+
+
 def strip_border_halo(out_image, alpha, max_depth_frac=0.035,
                       lum_min=218, sat_max=48):
     """Retire du masque le fond blanc que le modele a laisse le long du bord.
@@ -705,7 +784,8 @@ def preview_prompts(style_key, stem, pos_extra="", neg_extra="", auto_tags=True)
 def generate_variant(styles_cfg, style_key, portrait, seed=None, denoise=None,
                      pos_extra=None, neg_extra=None, boost=False,
                      lora_strength=None, cnet_strength=None, cnet_end=None,
-                     checkpoint=None, lora_enabled=True, auto_tags=True):
+                     checkpoint=None, lora_enabled=True, auto_tags=True,
+                     mask_mode=None):
     """Genere une variante stylisee d'un portrait. Retourne le chemin du PNG."""
     if seed is None:
         seed = random.randint(0, 2**31 - 1)
@@ -742,14 +822,8 @@ def generate_variant(styles_cfg, style_key, portrait, seed=None, denoise=None,
     wf = build_workflow(cfgset, up_name, seed, control_name)
     imginfo = queue_and_wait(wf)
     out = fetch_output(imginfo)
-    if out.size != alpha.size:
-        alpha = alpha.resize(out.size, Image.LANCZOS)
-    if app_s.get("anti_halo", True):
-        alpha = refine_alpha(out, alpha)
-        out = unmatte_white(out, alpha)
-    else:
-        out = out.convert("RGBA")
-        out.putalpha(alpha)
+    out = finalize_alpha(out, alpha, mask_mode, app_s.get("anti_halo", True),
+                         stem=portrait["stem"])
     var_dir = os.path.join(STYLIZED_DIR, style_key, portrait["stem"])
     os.makedirs(var_dir, exist_ok=True)
     out_path = os.path.join(var_dir, "seed_%d.png" % seed)
@@ -770,6 +844,7 @@ def generate_custom(portrait, opts):
     entierement libres (opts), img2img depuis l'original, une image uploadee
     ou l'image custom selectionnee."""
     stem = portrait["stem"]
+    mask_mode = opts.get("mask_mode")
     seed = int(opts.get("seed") or random.randint(0, 2**31 - 1))
     styles_cfg = load_styles()
     d = styles_cfg["defaults"]
@@ -823,14 +898,8 @@ def generate_custom(portrait, opts):
     wf = build_workflow(cfgset, up_name, seed, control_name)
     imginfo = queue_and_wait(wf)
     out = fetch_output(imginfo)
-    if out.size != alpha.size:
-        alpha = alpha.resize(out.size, Image.LANCZOS)
-    if app_s.get("anti_halo", True):
-        alpha = refine_alpha(out, alpha)
-        out = unmatte_white(out, alpha)
-    else:
-        out = out.convert("RGBA")
-        out.putalpha(alpha)
+    out = finalize_alpha(out, alpha, mask_mode, app_s.get("anti_halo", True),
+                         stem=stem)
     var_dir = os.path.join(STYLIZED_DIR, CUSTOM_KEY, stem)
     os.makedirs(var_dir, exist_ok=True)
     out_path = os.path.join(var_dir, "seed_%d.png" % seed)

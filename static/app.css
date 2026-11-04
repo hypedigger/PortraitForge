@@ -147,7 +147,7 @@ button.primary:hover{background:linear-gradient(135deg,#10b981,#14b8a6);box-shad
 .qrow{display:flex;gap:4px;align-items:center}
 .qlbl{font-size:11px;color:var(--dim);width:50px;flex-shrink:0}
 .qrow{min-width:0}
-.qrow .sxb{flex:1 1 auto;min-width:0;padding:6px 3px;font-size:11.5px;border-width:1px;margin:0;
+.qrow .sxb{flex:1 1 auto;min-width:0;padding:4px 3px;font-size:11.5px;border-width:1px;margin:0;
  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* cartes etroites : on retire d'abord les emojis, puis le mot "Genoux" (¾ seul,
    explication dans l'infobulle) pour que les 5 boutons de cadrage tiennent */
