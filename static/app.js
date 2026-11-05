@@ -2641,6 +2641,38 @@ function fmtDur(s){
 /* flux temps reel : SSE (/api/events) pousse l'etat des que la file change ;
    repli sur le polling 2 s si EventSource indisponible */
 let _es=null;
+/* ---------- fermeture de l'app : ComfyUI d'abord, puis le serveur ---------- */
+async function quitApp(){
+  let pend=0;
+  try{const q=await (await fetch('/api/queue')).json();pend=(q.pending||0)+(q.current?1:0);}catch(e){}
+  if(!confirm(T('Fermer PortraitForge ?\n\nComfyUI sera arrêté en premier, puis le serveur.')+
+     (pend?('\n\n'+T('Générations en attente : ')+pend+T(' — elles sont conservées et seront proposées (en pause) au prochain lancement.')):'')))
+    return;
+  if(_es){_es.close();_es=null;} /* pas de reconnexion pendant l'arret */
+  const ov=document.createElement('div');
+  ov.id='quitov';
+  ov.innerHTML='<div class="quitbox"><h3>⏻ Fermeture de PortraitForge</h3>'+
+    '<div id="qs1" class="qstep">⏳ Arrêt de ComfyUI…</div>'+
+    '<div id="qs2" class="qstep qwait">… Arrêt du serveur</div><div id="qsEnd"></div></div>';
+  document.body.appendChild(ov);
+  const set=(id,txt,cls)=>{const e=document.getElementById(id);e.textContent=txt;e.className='qstep '+(cls||'');};
+  /* 1) ComfyUI : le serveur l'arrete et confirme qu'il ne repond plus */
+  let comfyOk=false;
+  try{comfyOk=!!(await (await fetch('/api/shutdown',{method:'POST',body:JSON.stringify({step:'comfy'})})).json()).comfy_stopped;}catch(e){}
+  set('qs1',comfyOk?T('✓ ComfyUI arrêté'):T('⚠ ComfyUI ne répond plus à l\'arrêt — à fermer à la main si besoin'),comfyOk?'qok':'qwarn');
+  /* 2) le serveur, une fois ComfyUI traite */
+  set('qs2',T('⏳ Arrêt du serveur…'));
+  try{await fetch('/api/shutdown',{method:'POST',body:JSON.stringify({step:'server'})});}catch(e){}
+  let down=false;
+  for(let i=0;i<20&&!down;i++){
+    await new Promise(r=>setTimeout(r,500));
+    try{await fetch('/api/queue',{cache:'no-store'});}catch(e){down=true;}
+  }
+  set('qs2',down?T('✓ Serveur arrêté'):T('⚠ Le serveur répond encore'),down?'qok':'qwarn');
+  document.getElementById('qsEnd').innerHTML=down
+    ?'<p>'+T('PortraitForge est fermé. Tu peux fermer cet onglet.')+'</p>':'';
+  if(down) setTimeout(()=>{try{window.close();}catch(e){}},1500);
+}
 function startQueueFeed(){
   if(!window.EventSource){pollStatus();return;}
   _es=new EventSource('/api/events');

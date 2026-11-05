@@ -186,9 +186,69 @@ def _launch_comfy():
         return False
 
 
+_shutting_down = False  # arret de l'app demande : ne plus relancer ComfyUI
+
+
+def _comfy_pids():
+    """PIDs des processus ComfyUI : ligne de commande contenant le main.py de
+    launch_config.json (le python du venv est un trampoline : parent + enfant),
+    sinon le processus a l'ecoute sur le port de ComfyUI."""
+    main = ""
+    try:
+        with open(os.path.join(xs.APP_DIR, "launch_config.json"),
+                  "r", encoding="utf-8") as f:
+            main = os.path.expandvars(json.load(f)["comfy_main"])
+    except Exception:
+        pass
+    port = urllib.parse.urlparse(xs.COMFY_URL).port or 8188
+    ps = ("$m=$env:PF_COMFY_MAIN; $ids=@();"
+          "if($m){$ids+=Get-CimInstance Win32_Process | Where-Object "
+          "{ $_.CommandLine -and $_.CommandLine.Contains($m) } | ForEach-Object ProcessId};"
+          "$ids+=Get-NetTCPConnection -LocalPort %d -State Listen -EA SilentlyContinue "
+          "| ForEach-Object OwningProcess;"
+          "$ids | Sort-Object -Unique") % port
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                             capture_output=True, text=True, timeout=30,
+                             env=dict(os.environ, PF_COMFY_MAIN=main),
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        pids = {int(x) for x in out.stdout.split() if x.strip().isdigit()}
+    except Exception:
+        pids = set()
+    pids.discard(os.getpid())
+    return sorted(pids)
+
+
+def _begin_shutdown():
+    """Fige la file avant l'arret : plus de nouveau job, pas de reprise ni de
+    relance automatique de ComfyUI ; la file est sauvegardee."""
+    global _shutting_down, _paused, _auto_paused
+    _shutting_down = True
+    _paused = True
+    _auto_paused = False
+    _persist_queue()
+
+
+def _stop_comfy(timeout=20):
+    """Arrete ComfyUI (generation en cours interrompue) ; True si arrete."""
+    xs.comfy_interrupt()
+    for pid in _comfy_pids():
+        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
+                       capture_output=True,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if not xs.comfy_alive():
+            return True
+        time.sleep(0.5)
+    return False
+
+
 def _ensure_comfy():
     """Watchdog : verifie ComfyUI, le relance si mort, sinon met la file en pause."""
     global _paused, _auto_paused
+    if _shutting_down:
+        return False
     if xs.comfy_alive():
         if _auto_paused:
             _paused = False
@@ -390,7 +450,7 @@ def _worker():
     while True:
         if _paused:
             # pause posee par le watchdog : reessayer ComfyUI periodiquement
-            if _auto_paused and xs.comfy_alive():
+            if _auto_paused and not _shutting_down and xs.comfy_alive():
                 _paused = False
                 _auto_paused = False
                 _errors.append("ComfyUI repond a nouveau — reprise de la file")
@@ -1092,6 +1152,19 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"ok": True, "destination": xs.game_destination(game)})
                     return
             self._json({"ok": False, "error": "jeu courant introuvable"}, 404)
+        elif p == "/api/shutdown":
+            # fermeture de l'app : 1) ComfyUI (apres avoir fige la file),
+            # 2) le serveur, une fois la reponse envoyee
+            _begin_shutdown()
+            if body.get("step") == "comfy":
+                ok = _stop_comfy()
+                self._json({"ok": ok, "comfy_stopped": ok})
+                return
+            # etape 2 : le serveur (la file en attente est deja sauvegardee et
+            # sera proposee, en pause, au prochain lancement)
+            _persist_queue()
+            self._json({"ok": True, "server": "stopping"})
+            threading.Timer(0.8, lambda: os._exit(0)).start()
         elif p == "/api/game_mask":
             # contour par defaut des images du jeu courant (strict si absent)
             g = xs.load_games()
