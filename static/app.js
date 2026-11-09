@@ -1820,11 +1820,20 @@ function verOpenAll(ev,stem){
   document.getElementById('verpopbg').style.display='block';
   verNavUpdate();
 }
+/* un seul rechargement complet de l'etat apres une serie de suppressions
+   (au lieu d'un /api/state lourd par image) */
+let _delRefreshT=null;
+function scheduleRefreshAfterDelete(){
+  clearTimeout(_delRefreshT);
+  _delRefreshT=setTimeout(async()=>{try{await refresh();render();}catch(e){}},800);
+}
 async function verDel(ev,key,f,btn){
   ev.stopPropagation();ev.preventDefault();
   const [sk,stem]=key.split(/\/(.+)/);
-  await deleteVariant(sk,stem,f);
-  await refresh();
+  /* comme la visionneuse : la vignette disparait IMMEDIATEMENT, la
+     suppression part en arriere-plan (deleteVariant lit l'etat de selection
+     avant toute modification locale) */
+  const pending=deleteVariant(sk,stem,f);
   const cell=btn.closest('.vcell');
   const row=cell.parentElement;
   cell.remove();
@@ -1833,6 +1842,17 @@ async function verDel(ev,key,f,btn){
     if(sty&&sty.classList.contains('vsty')) sty.remove();
     row.remove();
   }
+  const local=S.variants[key];
+  if(local){
+    const i=local.indexOf(f);
+    if(i>=0) local.splice(i,1);
+    if(!local.length) delete S.variants[key];
+  }
+  if(S.selections[key]===f) S.selections[key]=null;
+  const g=document.getElementById('vglobrow');
+  if(g&&verAllStem) g.innerHTML=verGlobRowHtml(verAllStem);
+  try{await pending;}catch(e){toast(T('❌ Suppression impossible'));}
+  scheduleRefreshAfterDelete();
 }
 async function verPickAll(key,f,el){
   const nv=(S.selections[key]===f)?null:f;
