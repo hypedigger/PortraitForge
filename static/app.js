@@ -67,6 +67,7 @@ async function load(){
   /* le dernier jeu utilise est reouvert automatiquement ; le choix ne
      s'affiche au demarrage que s'il n'y a aucun jeu configure */
   if(!S.games||!S.games.length){gameOpen();gameAddToggle(true);}
+  if(S.support_due) setTimeout(supOpen,2500);
 }
 function _uiGameKey(){return S&&S.game?(S.game.id||S.game.name||''):'';}
 function saveUiState(){
@@ -3351,7 +3352,7 @@ document.addEventListener('keydown',e=>{
     if(e.key==='Escape') e.target.blur();
     return;
   }
-  if(e.key==='Escape'){hidePop();lbClose();hideCtx();verClose();optClose();helpClose();return;}
+  if(e.key==='Escape'){hidePop();lbClose();hideCtx();verClose();optClose();helpClose();supClose();return;}
   if(e.key==='?'){e.preventDefault();helpOpen();return;}
   /* Ctrl+Z : restaurer la derniere image supprimee */
   if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&(e.key==='z'||e.key==='Z')){
@@ -3404,13 +3405,33 @@ function helpOpen(){
     '</table><h4>Toutes les versions</h4><table class="helptbl">'+
     row('← / →','portrait précédent / suivant')+
     '</table>'+
-    '<div style="display:flex;justify-content:flex-end;margin-top:12px"><button onclick="helpClose()">Fermer</button></div>';
+    '<div style="display:flex;justify-content:flex-end;margin-top:12px"><a class="kofilnk" href="'+KOFI_URL+'" target="_blank" rel="noopener" title="soutenir le créateur de PortraitForge sur Ko-fi">☕ Soutenir</a><button onclick="helpClose()">Fermer</button></div>';
   document.getElementById('helppop').style.display='block';
   document.getElementById('helppopbg').style.display='block';
 }
 function helpClose(){
   const h=document.getElementById('helppop');
   if(h){h.style.display='none';document.getElementById('helppopbg').style.display='none';}
+}
+/* ---------- soutien : lien Ko-fi + popup discret (10e lancement, puis tous
+   les 100 ; le serveur compte les lancements et pose S.support_due) ---------- */
+const KOFI_URL='https://ko-fi.com/hypedigger';
+function openKofi(){window.open(KOFI_URL,'_blank','noopener');}
+function supOpen(){
+  fetch('/api/support_seen',{method:'POST',body:'{}'}); /* une seule fois par lancement */
+  document.getElementById('supOpt').checked=false;
+  document.getElementById('suppop').style.display='block';
+  document.getElementById('suppopbg').style.display='block';
+}
+function supClose(kofi){
+  const p=document.getElementById('suppop');
+  if(!p||p.style.display!=='block') return;
+  p.style.display='none';document.getElementById('suppopbg').style.display='none';
+  if(document.getElementById('supOpt').checked){
+    fetch('/api/settings',{method:'POST',body:JSON.stringify({support_optout:true})});
+    if(S&&S.settings) S.settings.support_optout=true;
+  }
+  if(kofi) openKofi();
 }
 
 /* ---------- info-bulle retardee (2 s) : actions des clics (attribut data-tip)

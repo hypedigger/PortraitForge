@@ -381,6 +381,17 @@ table.matrix{border-collapse:collapse}
 .helptbl td{padding:3px 10px 3px 0;vertical-align:top}
 .helptbl .hk{white-space:nowrap;color:#bdf;font-family:Consolas,monospace;font-weight:bold}
 #btnHelp{width:34px;font-weight:bold}
+/* soutien : lien Ko-fi (Options, aide) + popup discret */
+.kofilnk{margin-right:auto;align-self:center;font-size:12px;color:#7cf;text-decoration:none}
+.kofilnk:hover{text-decoration:underline}
+#suppopbg{position:fixed;inset:0;background:#000a;z-index:149;display:none}
+#suppop{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:150;background:#20242c;
+ border:1px solid #5af;border-radius:12px;padding:16px 22px;display:none;box-shadow:0 8px 40px #000d;
+ width:420px;max-width:calc(100vw - 32px);box-sizing:border-box}
+#suppop h3{margin:0 0 10px;color:#8fd}
+#suppop p{margin:0 0 10px;font-size:13px;line-height:1.45}
+#suppop label{font-size:12px;color:var(--dim);cursor:pointer}
+#suppop .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 #verpopbg{position:fixed;inset:0;background:#000a;z-index:69;display:none}
 /* voile d'attente de l'export (jeux a exporteur externe : reconstruction du mod) */
 #waitpop{position:fixed;inset:0;background:#000b;z-index:80;display:none;align-items:center;justify-content:center}

@@ -121,6 +121,8 @@ If PortraitForge powers your texture pack:
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/hypedigger)
 
+Inside the app, a small **☕ Support** link sits at the bottom of the Options panel and of the keyboard-shortcuts help. A gentle reminder also pops up on the 10th launch and then every 100 launches; tick "Don't ask me again" to turn it off for good (stored as `support_optout` in `app_settings.json`, next to the `usage_count` launch counter).
+
 ## License
 
 [MIT](LICENSE)

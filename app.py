@@ -55,7 +55,8 @@ DEFAULT_SETTINGS = {"regen_count": 2, "hidden_styles": [],
                     "sort_portraits": "date", "sort_secondary": "date",
                     "lb_dense": False, "lb_bg": "grey", "notify_done": False,
                     "lang": "fr", "user_presets": {},
-                    "show_stem_col": False}
+                    "show_stem_col": False,
+                    "usage_count": 0, "support_optout": False}
 
 
 def apply_runtime_settings(s):
@@ -77,6 +78,30 @@ def load_settings():
 def save_settings(s):
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(s, f, indent=1)
+
+
+# soutien (Ko-fi) : compteur de lancements + popup discret affiche par la page
+SUPPORT_DUE = False  # popup a proposer pour ce lancement (pose au demarrage)
+
+
+def bump_usage_count():
+    """Incremente le compteur de lancements dans app_settings.json (seule cette
+    cle est touchee ; un fichier de reglages illisible est laisse tel quel)."""
+    try:
+        s = {}
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                s = json.load(f)
+        s["usage_count"] = int(s.get("usage_count") or 0) + 1
+        save_settings(s)
+        return s["usage_count"]
+    except Exception:
+        return 0
+
+
+def support_due(n, optout):
+    """Popup de soutien : au 10e lancement, puis tous les 100 (sauf opt-out)."""
+    return not optout and (n == 10 or (n >= 100 and n % 100 == 0))
 
 
 def get_thumb(src_path, cache_key):
@@ -708,6 +733,7 @@ class Handler(BaseHTTPRequestHandler):
                         "words": xs.load_portrait_words(),
                         "final": xs.load_final(),
                         "settings": load_settings(),
+                        "support_due": SUPPORT_DUE,
                         "game": dict(game, destination=xs.game_destination(game)),
                         "games": [dict(x, destination=xs.game_destination(x))
                                   for x in xs.load_games()["games"]],
@@ -1603,6 +1629,11 @@ class Handler(BaseHTTPRequestHandler):
             save_settings(s)
             apply_runtime_settings(s)
             self._json({"ok": True, "settings": s})
+        elif p == "/api/support_seen":
+            # popup de soutien affiche : ne plus le proposer (F5, autre onglet)
+            global SUPPORT_DUE
+            SUPPORT_DUE = False
+            self._json({"ok": True})
         elif p == "/api/style_cfg":
             cfg_path = os.path.join(xs.APP_DIR, "styles.json")
             with open(cfg_path, "r", encoding="utf-8") as f:
@@ -1672,4 +1703,8 @@ if __name__ == "__main__":
     print("PortraitForge -> http://127.0.0.1:%d" % PORT)
     if not xs.comfy_alive():
         print("ATTENTION: ComfyUI ne repond pas sur %s (la regeneration echouera)" % xs.COMFY_URL)
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    httpd = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    # un lancement = un demarrage reussi du serveur (port libre)
+    SUPPORT_DUE = support_due(bump_usage_count(),
+                              load_settings().get("support_optout"))
+    httpd.serve_forever()

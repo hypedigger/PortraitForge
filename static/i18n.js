@@ -477,7 +477,17 @@ const PF_I18N_EN = {
   "Toutes les versions": "All versions",
   "portrait précédent / suivant": "previous / next portrait",
   "portrait précédent (←)": "previous portrait (←)",
-  "portrait suivant (→)": "next portrait (→)"
+  "portrait suivant (→)": "next portrait (→)",
+
+  /* ---- soutien (Ko-fi) ---- */
+  "☕ Soutenir": "☕ Support",
+  "soutenir le créateur de PortraitForge sur Ko-fi": "support PortraitForge's creator on Ko-fi",
+  "☕ Vous aimez PortraitForge ?": "☕ Enjoying PortraitForge?",
+  "Cette application est gratuite et open source, développée sur le temps libre de son créateur.": "This app is free and open source, built in its creator's spare time.",
+  "Si elle vous fait gagner du temps, un petit café sur Ko-fi l'aide à continuer — merci !": "If it saves you time, a small coffee on Ko-fi helps keep it going — thank you!",
+  "☕ Soutenir sur Ko-fi": "☕ Support on Ko-fi",
+  "Plus tard": "Later",
+  "Ne plus me le demander": "Don't ask me again"
 };
 
 /* chaînes paramétrées (nombres, noms) — chaque regex ne matche QUE du français,

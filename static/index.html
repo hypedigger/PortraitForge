@@ -215,7 +215,7 @@
    civitai.com → Settings → API Keys. Stockée en local dans app_settings.json.
   </div>
  </div>
- <div class="actions"><button onclick="optClose()">Fermer</button></div>
+ <div class="actions"><a class="kofilnk" href="https://ko-fi.com/hypedigger" target="_blank" rel="noopener" title="soutenir le créateur de PortraitForge sur Ko-fi">☕ Soutenir</a><button onclick="optClose()">Fermer</button></div>
 </div>
 <div id="gamepopbg" onclick="gameClose()"></div>
 <div id="gamepop">
@@ -270,6 +270,15 @@
 <div id="ctx"></div>
 <div id="helppopbg" onclick="helpClose()"></div>
 <div id="helppop"></div>
+<div id="suppopbg" onclick="supClose()"></div>
+<div id="suppop">
+ <h3>☕ Vous aimez PortraitForge ?</h3>
+ <p>Cette application est gratuite et open source, développée sur le temps libre de son créateur.</p>
+ <p>Si elle vous fait gagner du temps, un petit café sur Ko-fi l'aide à continuer — merci !</p>
+ <label><input type="checkbox" id="supOpt"> Ne plus me le demander</label>
+ <div class="actions"><button onclick="supClose()">Plus tard</button>
+ <button class="primary" onclick="supClose(true)">☕ Soutenir sur Ko-fi</button></div>
+</div>
 <div id="verpopbg" onclick="verClose()"></div>
 <div id="verpop"></div>
 <div id="waitpop"><div class="waitbox">
